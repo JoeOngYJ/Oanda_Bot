@@ -55,7 +55,9 @@ bash scripts/run_all_agents.sh
 Then run each printed command in its own terminal.
 
 ## Documentation Hub
-1. Architecture: [docs/ARCHITECTURE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/ARCHITECTURE.md)
+0. Navigation guide: [docs/reference/NAVIGATION.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/reference/NAVIGATION.md)
+1. Model navigation guide: [docs/reference/MODEL_NAVIGATION.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/reference/MODEL_NAVIGATION.md)
+2. Architecture: [docs/ARCHITECTURE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/ARCHITECTURE.md)
 2. Operations: [docs/OPERATIONS.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/OPERATIONS.md)
 3. Deployment: [docs/DEPLOYMENT.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/DEPLOYMENT.md)
 4. Troubleshooting: [docs/TROUBLESHOOTING.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/TROUBLESHOOTING.md)
@@ -110,6 +112,7 @@ Then run each printed command in its own terminal.
 31. Intermediate artifact retention:
    1. `make mtf-clean OLDER_THAN_DAYS=7 DELETE_AFTER_ARCHIVE=1`
 32. Systemd + VPS runbook: [docs/SYSTEMD_VPS_RUNBOOK.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/SYSTEMD_VPS_RUNBOOK.md)
+33. Download fix note (archived): [docs/notes/DOWNLOAD_FIX_SUMMARY.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/notes/DOWNLOAD_FIX_SUMMARY.md)
 
 ## Core Streams
 Configured in `config/system.yaml`:

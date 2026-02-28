@@ -1,0 +1,5 @@
+multiframe_regime_model_20260228_194306.json
+source=data/research/multiframe_regime_model_20260228_194306.json
+validated_with=backtesting.core.regime_runtime.RegimeModel.load
+validated_at_utc=2026-02-28T21:59:46Z
+sha256=ebb736cf3088673f2e514fcf4aa86a201f35fa66fbaa6881aae8f03b9b3c469e
