@@ -10,6 +10,7 @@ class Timeframe(Enum):
     Timeframe enumeration with pandas resample string, seconds, and OANDA granularity.
     Each member stores: (pandas_freq, seconds, oanda_granularity)
     """
+    M1 = ("1T", 60, "M1")
     M15 = ("15T", 900, "M15")
     M30 = ("30T", 1800, "M30")
     H1 = ("1H", 3600, "H1")

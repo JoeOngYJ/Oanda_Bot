@@ -141,7 +141,7 @@ def main():
 
     parser.add_argument("--csv", required=True, help="Path to CSV file")
     parser.add_argument("--instrument", required=True, help="Instrument symbol (e.g., EUR_USD, XAU_USD)")
-    parser.add_argument("--timeframe", required=True, help="Timeframe (e.g., M15, M30, H1, H4, D1)")
+    parser.add_argument("--timeframe", required=True, help="Timeframe (e.g., M1, M15, M30, H1, H4, D1)")
     parser.add_argument("--data-dir", default="data/backtesting", help="Data directory (default: data/backtesting)")
     parser.add_argument("--validate-only", action="store_true", help="Only validate CSV, don't import")
 
@@ -163,7 +163,7 @@ def main():
             timeframe = Timeframe.from_pandas_freq(args.timeframe)
         except ValueError:
             print(f"ERROR: Invalid timeframe: {args.timeframe}")
-            print(f"Valid timeframes: M15, M30, H1, H4, D1")
+            print(f"Valid timeframes: M1, M15, M30, H1, H4, D1")
             return 1
 
     # Validate CSV

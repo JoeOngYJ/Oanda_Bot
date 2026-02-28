@@ -140,7 +140,7 @@ def main():
     )
 
     parser.add_argument("--instrument", required=True, help="Instrument (e.g., EUR_USD, XAU_USD)")
-    parser.add_argument("--timeframe", required=True, help="Timeframe (M15, M30, H1, H4, D1)")
+    parser.add_argument("--timeframe", required=True, help="Timeframe (M1, M15, M30, H1, H4, D1)")
     parser.add_argument("--start", required=True, help="Start date (YYYY-MM-DD or ISO format)")
     parser.add_argument("--end", required=True, help="End date (YYYY-MM-DD or ISO format)")
     parser.add_argument("--chunk-days", type=int, default=7, help="Days per chunk (default: 7)")
@@ -164,7 +164,7 @@ def main():
         timeframe = Timeframe.from_oanda_granularity(args.timeframe)
     except ValueError:
         print(f"ERROR: Invalid timeframe: {args.timeframe}")
-        print(f"Valid: M15, M30, H1, H4, D1")
+        print(f"Valid: M1, M15, M30, H1, H4, D1")
         return 1
 
     # Parse dates
