@@ -3,7 +3,8 @@ Validates market data for anomalies, gaps, and sanity.
 All checks are deterministic.
 """
 
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Tuple, List, Dict
 from shared.models import MarketTick, Instrument
@@ -23,7 +24,22 @@ class DataValidator:
         # Validation thresholds
         self.max_spread_pct = 0.005  # 0.5% max spread
         self.max_price_jump_pct = 0.02  # 2% max price jump
-        self.max_staleness_seconds = 10.0
+        self.max_staleness_seconds = float(
+            os.getenv("MARKET_DATA_MAX_STALENESS_SECONDS", "10.0")
+        )
+
+    @staticmethod
+    def _is_fx_market_open(now_utc: datetime) -> bool:
+        """Approximate OTC FX/metals open window: Sun 21:00 UTC -> Fri 22:00 UTC."""
+        wd = now_utc.weekday()  # Mon=0 ... Sun=6
+        hour = now_utc.hour
+        if wd in (0, 1, 2, 3):
+            return True
+        if wd == 4:
+            return hour < 22
+        if wd == 6:
+            return hour >= 21
+        return False
 
     def validate(self, tick: MarketTick) -> Tuple[bool, List[str]]:
         """
@@ -63,9 +79,14 @@ class DataValidator:
                 )
 
         # 5. Timestamp freshness
-        now = datetime.utcnow()
-        age = (now - tick.timestamp).total_seconds()
-        if age > self.max_staleness_seconds:
+        now = datetime.now(timezone.utc)
+        tick_ts = tick.timestamp
+        if tick_ts.tzinfo is None:
+            tick_ts = tick_ts.replace(tzinfo=timezone.utc)
+        else:
+            tick_ts = tick_ts.astimezone(timezone.utc)
+        age = (now - tick_ts).total_seconds()
+        if self._is_fx_market_open(now) and age > self.max_staleness_seconds:
             issues.append(f"Stale tick: {age:.1f}s old")
 
         # Update last tick

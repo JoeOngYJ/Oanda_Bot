@@ -16,6 +16,9 @@ class Instrument(str, Enum):
     GBP_USD = "GBP_USD"
     USD_JPY = "USD_JPY"
     AUD_USD = "AUD_USD"
+    AUD_JPY = "AUD_JPY"
+    GBP_JPY = "GBP_JPY"
+    XAU_USD = "XAU_USD"
     USD_CAD = "USD_CAD"
 
 

@@ -24,6 +24,10 @@ oanda:
     - EUR_USD
     - GBP_USD
     - USD_JPY
+    - AUD_USD
+    - AUD_JPY
+    - GBP_JPY
+    - XAU_USD
 
   # Rate limiting
   requests_per_second: 100

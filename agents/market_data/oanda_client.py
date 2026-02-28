@@ -5,8 +5,10 @@ Handles reconnections and heartbeats.
 
 import asyncio
 import logging
-from typing import AsyncGenerator, Dict
+from datetime import datetime, timedelta, timezone
+from typing import AsyncGenerator, Dict, List
 from oandapyV20 import API
+from oandapyV20.endpoints.instruments import InstrumentsCandles
 from oandapyV20.endpoints.pricing import PricingStream
 from shared.config import Config
 from shared.models import Instrument
@@ -91,3 +93,106 @@ class OandaStreamClient:
         """Close all streaming connections"""
         logger.info("Closing Oanda streaming connections")
         # Cleanup connections if needed
+
+    def get_recent_candles(
+        self,
+        instrument: Instrument,
+        granularity: str,
+        count: int,
+        price_component: str = "M",
+    ) -> List[Dict]:
+        """
+        Fetch recent completed candles for warmup/bootstrap.
+
+        Returns a list of dictionaries:
+        [{time, open, high, low, close, volume}, ...]
+        """
+        if count <= 0:
+            return []
+
+        max_per_request = 5000
+        remaining = int(count)
+        cursor_to: datetime | None = None
+        out: List[Dict] = []
+        safety_loops = 0
+
+        while remaining > 0:
+            safety_loops += 1
+            if safety_loops > 32:
+                logger.warning(
+                    "Aborting candle pagination after safety limit",
+                    extra={"instrument": instrument.value, "granularity": granularity, "requested": count},
+                )
+                break
+
+            req_count = min(remaining, max_per_request)
+            params: Dict[str, str | int] = {
+                "granularity": granularity,
+                "price": price_component,
+                "count": int(req_count),
+            }
+            if cursor_to is not None:
+                params["to"] = cursor_to.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+            request = InstrumentsCandles(instrument=instrument.value, params=params)
+            resp = self.api.request(request)
+            candles = resp.get("candles", []) or []
+            if not candles:
+                break
+
+            chunk: List[Dict] = []
+            for c in candles:
+                if not c.get("complete", False):
+                    continue
+                mid = c.get("mid") or {}
+                ts = self._parse_oanda_time(c.get("time"))
+                if ts is None:
+                    continue
+                chunk.append(
+                    {
+                        "time": ts,
+                        "open": mid.get("o"),
+                        "high": mid.get("h"),
+                        "low": mid.get("l"),
+                        "close": mid.get("c"),
+                        "volume": int(c.get("volume", 0)),
+                    }
+                )
+
+            if not chunk:
+                break
+
+            out.extend(chunk)
+            remaining -= len(chunk)
+
+            earliest = chunk[0]["time"]
+            if not isinstance(earliest, datetime):
+                break
+            cursor_to = earliest - timedelta(microseconds=1)
+            if len(chunk) < req_count:
+                break
+
+        out.sort(key=lambda x: x["time"])
+        deduped: List[Dict] = []
+        last_ts: datetime | None = None
+        for row in out:
+            ts = row["time"]
+            if ts == last_ts:
+                continue
+            deduped.append(row)
+            last_ts = ts
+        if len(deduped) > count:
+            deduped = deduped[-count:]
+        return deduped
+
+    @staticmethod
+    def _parse_oanda_time(value) -> datetime | None:
+        if value is None:
+            return None
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except Exception:
+            try:
+                return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+            except Exception:
+                return None

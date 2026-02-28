@@ -1,0 +1,17 @@
+[Unit]
+Description=OANDA Trading Supervisor
+After=network-online.target oanda-infra.service
+Wants=network-online.target oanda-infra.service
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_ROOT__
+EnvironmentFile=__PROJECT_ROOT__/.env
+ExecStart=__PROJECT_ROOT__/.venv/bin/python scripts/trading_supervisor.py --project-root __PROJECT_ROOT__ --poll-seconds 2
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

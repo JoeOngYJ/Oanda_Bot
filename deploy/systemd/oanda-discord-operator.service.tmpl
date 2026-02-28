@@ -1,0 +1,17 @@
+[Unit]
+Description=OANDA Discord Operator Bot
+After=network-online.target oanda-trading-supervisor.service
+Wants=network-online.target oanda-trading-supervisor.service
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_ROOT__
+EnvironmentFile=__PROJECT_ROOT__/.env
+ExecStart=__PROJECT_ROOT__/.venv/bin/python -u scripts/discord_operator_bot.py --poll-seconds 2 --alert-min-severity info --commands-prefix !
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

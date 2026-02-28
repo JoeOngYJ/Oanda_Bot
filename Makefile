@@ -18,6 +18,12 @@
 .PHONY: xau-breakout-opt
 .PHONY: exec-kill-on exec-kill-off exec-shadow-on exec-shadow-off
 .PHONY: exec-status-api
+.PHONY: strategy-regime-agent regime-shadow-smoke strategy-regime-agent-xau-prod
+.PHONY: discord-operator-bot
+.PHONY: trading-supervisor
+.PHONY: trading-journal-agent
+.PHONY: systemd-user-install systemd-user-enable systemd-user-status
+.PHONY: systemd-user-enable-infra
 
 deps:
 	python -m pip install -r requirements.txt
@@ -119,6 +125,58 @@ phase4-live:
 # Signal validation (waits for a real signal; requires Redis)
 phase4-signal:
 	PYTHONPATH=. python tests/integration/test_strategy_signal_validation.py
+
+# Example:
+# make strategy-regime-agent MODEL_JSON=data/research/multiframe_regime_model_latest.json INSTRUMENT=XAU_USD DECISION_MODE=ensemble GPU=auto
+strategy-regime-agent:
+	./.venv/bin/python -m agents.strategy.regime_runtime_agent \
+		--model-json "$(MODEL_JSON)" \
+		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),XAU_USD)" \
+		--decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" \
+		--quantity "$(if $(QUANTITY),$(QUANTITY),2)" \
+		--min-confidence "$(if $(MIN_CONFIDENCE),$(MIN_CONFIDENCE),0.25)" \
+		--warmup "$(if $(WARMUP),$(WARMUP),on)" \
+		--warmup-base-bars "$(if $(WARMUP_BASE_BARS),$(WARMUP_BASE_BARS),1500)" \
+		$(if $(WARMUP_M15_BARS),--warmup-m15-bars "$(WARMUP_M15_BARS)",) \
+		$(if $(WARMUP_H1_BARS),--warmup-h1-bars "$(WARMUP_H1_BARS)",) \
+		$(if $(WARMUP_H4_BARS),--warmup-h4-bars "$(WARMUP_H4_BARS)",) \
+		$(if $(WARMUP_D1_BARS),--warmup-d1-bars "$(WARMUP_D1_BARS)",) \
+		--gpu "$(if $(GPU),$(GPU),auto)"
+
+# XAU production profile with deeper multi-timeframe warmup context.
+# Example:
+# make strategy-regime-agent-xau-prod MODEL_JSON=data/research/multiframe_regime_model_20260228_194306.json
+strategy-regime-agent-xau-prod:
+	@$(MAKE) strategy-regime-agent \
+		MODEL_JSON="$(MODEL_JSON)" \
+		INSTRUMENT="$(if $(INSTRUMENT),$(INSTRUMENT),XAU_USD)" \
+		DECISION_MODE="$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" \
+		QUANTITY="$(if $(QUANTITY),$(QUANTITY),3)" \
+		MIN_CONFIDENCE="$(if $(MIN_CONFIDENCE),$(MIN_CONFIDENCE),0.25)" \
+		GPU="$(if $(GPU),$(GPU),auto)" \
+		WARMUP=on \
+		WARMUP_M15_BARS="$(if $(WARMUP_M15_BARS),$(WARMUP_M15_BARS),5000)" \
+		WARMUP_H1_BARS="$(if $(WARMUP_H1_BARS),$(WARMUP_H1_BARS),3000)" \
+		WARMUP_H4_BARS="$(if $(WARMUP_H4_BARS),$(WARMUP_H4_BARS),1500)" \
+		WARMUP_D1_BARS="$(if $(WARMUP_D1_BARS),$(WARMUP_D1_BARS),750)"
+
+# Smoke test: run execution in shadow mode and keep kill-switch off to prevent live sends.
+# Requires local Redis and valid OANDA env vars for market data streaming.
+regime-shadow-smoke:
+	@test -n "$(MODEL_JSON)" || (echo "Missing MODEL_JSON=<runtime_model.json>" && exit 1)
+	cd /home/joe/Desktop/Algo_trading/oanda-trading-system && \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
+		sleep 3; \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.risk.agent & echo $$! > /tmp/risk_agent.pid; \
+		sleep 2; \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.execution.agent & echo $$! > /tmp/execution_agent.pid; \
+		sleep 2; \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.strategy.regime_runtime_agent --model-json "$(MODEL_JSON)" --instrument "$(if $(INSTRUMENT),$(INSTRUMENT),XAU_USD)" --decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" --warmup "$(if $(WARMUP),$(WARMUP),on)" --warmup-base-bars "$(if $(WARMUP_BASE_BARS),$(WARMUP_BASE_BARS),1500)" $(if $(WARMUP_M15_BARS),--warmup-m15-bars "$(WARMUP_M15_BARS)",) $(if $(WARMUP_H1_BARS),--warmup-h1-bars "$(WARMUP_H1_BARS)",) $(if $(WARMUP_H4_BARS),--warmup-h4-bars "$(WARMUP_H4_BARS)",) $(if $(WARMUP_D1_BARS),--warmup-d1-bars "$(WARMUP_D1_BARS)",) --gpu "$(if $(GPU),$(GPU),auto)" & echo $$! > /tmp/strategy_regime_agent.pid; \
+		sleep "$(if $(DURATION_SEC),$(DURATION_SEC),60)"; \
+		kill `cat /tmp/strategy_regime_agent.pid` || true; \
+		kill `cat /tmp/execution_agent.pid` || true; \
+		kill `cat /tmp/risk_agent.pid` || true; \
+		kill `cat /tmp/market_data_agent.pid` || true
 
 # Backtest script (if present)
 phase4-backtest:
@@ -286,7 +344,7 @@ realtime-backtest:
 		$(if $(SNAPSHOT_EVERY_BARS),--snapshot-every-bars "$(SNAPSHOT_EVERY_BARS)",)
 
 # Example:
-# make regime-runtime-backtest MODEL_JSON=data/research/regime_research_EUR_USD_M15_<stamp>_runtime_model.json INSTRUMENT=EUR_USD TF=M15 START=2025-01-01 END=2025-12-31
+# make regime-runtime-backtest MODEL_JSON=data/research/regime_research_EUR_USD_M15_<stamp>_runtime_model.json INSTRUMENT=EUR_USD TF=M15 START=2025-01-01 END=2025-12-31 GPU=auto
 regime-runtime-backtest:
 	./.venv/bin/python scripts/run_regime_runtime_backtest.py \
 		--model-json "$(MODEL_JSON)" \
@@ -296,6 +354,7 @@ regime-runtime-backtest:
 		--end "$(if $(END),$(END),2025-12-31)" \
 		--fill-mode "$(if $(FILL_MODE),$(FILL_MODE),next_open)" \
 		--decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" \
+		--gpu "$(if $(GPU),$(GPU),auto)" \
 		--risk-per-trade-pct "$(if $(RISK_PER_TRADE_PCT),$(RISK_PER_TRADE_PCT),0.01)" \
 		--max-notional-exposure-pct "$(if $(MAX_NOTIONAL_EXPOSURE_PCT),$(MAX_NOTIONAL_EXPOSURE_PCT),1.0)" \
 		--min-quantity "$(if $(MIN_QUANTITY),$(MIN_QUANTITY),1)" \
@@ -470,3 +529,39 @@ exec-shadow-off:
 
 exec-status-api:
 	python scripts/execution_status_api.py --host "$(if $(HOST),$(HOST),0.0.0.0)" --port "$(if $(PORT),$(PORT),8010)"
+
+# Example:
+# DISCORD_BOT_TOKEN=... DISCORD_CHANNEL_ID=... make discord-operator-bot ALERT_MIN_SEVERITY=warning
+discord-operator-bot:
+	./.venv/bin/python scripts/discord_operator_bot.py \
+		--poll-seconds "$(if $(POLL_SECONDS),$(POLL_SECONDS),3)" \
+		--alert-min-severity "$(if $(ALERT_MIN_SEVERITY),$(ALERT_MIN_SEVERITY),warning)" \
+		--commands-prefix "$(if $(COMMANDS_PREFIX),$(COMMANDS_PREFIX),!)"
+
+# Example:
+# REGIME_MODEL_JSON=data/research/multiframe_regime_model_20260228_194306.json make trading-supervisor
+trading-supervisor:
+	./.venv/bin/python scripts/trading_supervisor.py \
+		--project-root "$(if $(PROJECT_ROOT),$(PROJECT_ROOT),/home/joe/Desktop/Algo_trading/oanda-trading-system)" \
+		--poll-seconds "$(if $(POLL_SECONDS),$(POLL_SECONDS),2)"
+
+# Example:
+# make trading-journal-agent OUTPUT_DIR=data/reports/trading_journal
+trading-journal-agent:
+	./.venv/bin/python scripts/trading_journal_agent.py \
+		--output-dir "$(if $(OUTPUT_DIR),$(OUTPUT_DIR),data/reports/trading_journal)"
+
+# Example:
+# make systemd-user-install PROJECT_ROOT=/home/joe/Desktop/Algo_trading/oanda-trading-system
+systemd-user-install:
+	./scripts/install_systemd_user_services.sh "$(if $(PROJECT_ROOT),$(PROJECT_ROOT),/home/joe/Desktop/Algo_trading/oanda-trading-system)"
+
+systemd-user-enable:
+	systemctl --user enable --now oanda-trading-supervisor.service
+	systemctl --user enable --now oanda-discord-operator.service
+
+systemd-user-enable-infra:
+	systemctl --user enable --now oanda-infra.service
+
+systemd-user-status:
+	systemctl --user status oanda-infra.service oanda-trading-supervisor.service oanda-discord-operator.service

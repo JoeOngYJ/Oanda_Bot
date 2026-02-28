@@ -109,6 +109,7 @@ Then run each printed command in its own terminal.
    5. `make xau-mtf-dev`
 31. Intermediate artifact retention:
    1. `make mtf-clean OLDER_THAN_DAYS=7 DELETE_AFTER_ARCHIVE=1`
+32. Systemd + VPS runbook: [docs/SYSTEMD_VPS_RUNBOOK.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/SYSTEMD_VPS_RUNBOOK.md)
 
 ## Core Streams
 Configured in `config/system.yaml`:
