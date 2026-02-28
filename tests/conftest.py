@@ -76,7 +76,8 @@ def temp_config_dir():
                     "risk_checks": "test:risk_checks",
                     "orders": "test:orders",
                     "executions": "test:executions",
-                    "alerts": "test:alerts"
+                    "alerts": "test:alerts",
+                    "execution_control": "test:execution_control",
                 }
             },
             "influxdb": {

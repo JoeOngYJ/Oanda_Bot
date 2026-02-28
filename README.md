@@ -1,285 +1,125 @@
-# oanda-trading-system
+# OANDA Trading System
 
-Lightweight skeleton for an OANDA backtesting / research system. Fill modules under `backtesting/` with real implementations.
+Multi-agent FX trading and backtesting platform built around OANDA v20 APIs.
 
-See `scripts/` for quick runners.
-# Multi-Agent Forex Trading System - Phase 1
+## What This Repo Contains
+1. Live-style agent pipeline:
+   1. `market_data` -> `strategy` -> `risk` -> `execution` -> `monitoring`
+2. Backtesting stack:
+   1. Data download/warehouse
+   2. Strategy simulation
+   3. Execution modeling with spread + commission
+3. Shared infrastructure:
+   1. Pydantic models
+   2. Redis Streams message bus
+   3. YAML config loading + env substitution
+4. Operational support:
+   1. Docker Compose for Redis/InfluxDB/Grafana/Prometheus
+   2. Test suite across unit, integration, performance, stress, failover
 
-A production-ready multi-agent algorithmic trading system for forex markets using the Oanda v20 REST API.
+## Quick Start
 
-## Phase 1: Core Infrastructure
-
-This phase implements the foundational components:
-- Complete project directory structure
-- Shared data models with Pydantic validation
-- Redis-based message bus for inter-agent communication
-- Configuration system using YAML + environment variables
-- Centralized logging with structured output
-- Docker Compose for infrastructure services
-- Comprehensive unit tests
-
-## Project Structure
-
-```
-oanda-trading-system/
-├── agents/                 # Agent implementations (future phases)
-│   ├── monitoring/
-│   ├── market_data/
-│   ├── strategy/
-│   ├── risk/
-│   └── execution/
-├── shared/                 # Shared modules
-│   ├── models.py          # Pydantic data models
-│   ├── message_bus.py     # Redis Streams wrapper
-│   ├── config.py          # Configuration loading
-│   ├── logging_config.py  # Logging setup
-│   └── utils.py           # Utility functions
-├── config/                 # Configuration files
-│   ├── system.yaml
-│   ├── oanda.yaml
-│   ├── risk_limits.yaml
-│   ├── strategies.yaml
-│   └── monitoring.yaml
-├── tests/                  # Unit tests
-├── scripts/                # Utility scripts
-├── data/historical/        # Historical data cache
-├── logs/                   # Log files
-├── docker-compose.yml      # Infrastructure services
-├── requirements.txt        # Python dependencies
-└── .env.example           # Environment variables template
-```
-
-## Prerequisites
-
-- Python 3.11+
-- Docker and Docker Compose
-- Oanda practice account (for testing)
-
-## Installation
-
-### 1. Install Python Dependencies
-
+### 1. Install
 ```bash
-cd oanda-trading-system
-pip install -r requirements.txt
+cd /home/joe/Desktop/Algo_trading/oanda-trading-system
+python -m pip install -r requirements.txt
 ```
 
-### 2. Set Up Environment Variables
-
+### 2. Configure Environment
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your Oanda credentials:
-```bash
-OANDA_ACCOUNT_ID=your_account_id_here
-OANDA_API_TOKEN=your_api_token_here
-INFLUXDB_TOKEN=my-super-secret-token
-```
+Set required secrets in `.env`:
+1. `OANDA_ACCOUNT_ID`
+2. `OANDA_API_TOKEN`
+3. `INFLUXDB_TOKEN`
 
-### 3. Start Infrastructure Services
-
+### 3. Start Infrastructure
 ```bash
 docker-compose up -d
-```
-
-This starts:
-- **Redis** (port 6379): Message bus
-- **InfluxDB** (port 8086): Time-series database
-- **Grafana** (port 3000): Visualization (admin/admin)
-- **Prometheus** (port 9090): Metrics collection
-
-Verify services are running:
-```bash
 docker-compose ps
 ```
 
-## Running Tests
-
-Run all unit tests:
+### 4. Run Tests
 ```bash
-pytest tests/ -v
+pytest -q tests/backtesting
+pytest -q tests/test_execution tests/test_risk tests/test_market_data
 ```
 
-Run with coverage:
+### 5. Run Agents
+Use:
 ```bash
-pytest tests/ -v --cov=shared --cov-report=html
+bash scripts/run_all_agents.sh
 ```
+Then run each printed command in its own terminal.
 
-Run specific test file:
-```bash
-pytest tests/test_models.py -v
-```
+## Documentation Hub
+1. Architecture: [docs/ARCHITECTURE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/ARCHITECTURE.md)
+2. Operations: [docs/OPERATIONS.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/OPERATIONS.md)
+3. Deployment: [docs/DEPLOYMENT.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/DEPLOYMENT.md)
+4. Troubleshooting: [docs/TROUBLESHOOTING.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/TROUBLESHOOTING.md)
+5. Feature catalog: [docs/FEATURE_CATALOG.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/FEATURE_CATALOG.md)
+6. Repo map and cleanup guide: [docs/REPO_STRUCTURE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/REPO_STRUCTURE.md)
+7. Professionalization roadmap: [docs/PROFESSIONALIZATION_PLAN.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/PROFESSIONALIZATION_PLAN.md)
+8. HTML project overview: [docs/overview.html](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/overview.html)
+9. Src migration status: [docs/MIGRATION_STATUS.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/MIGRATION_STATUS.md)
+10. Profitability playbook: [docs/PROFITABILITY_PLAYBOOK.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/PROFITABILITY_PLAYBOOK.md)
+11. Strategy scorecard template: [docs/STRATEGY_SCORECARD_TEMPLATE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/STRATEGY_SCORECARD_TEMPLATE.md)
+12. Strategy scorecard CSV: [strategy_scorecard_template.csv](/home/joe/Desktop/Algo_trading/oanda-trading-system/data/templates/strategy_scorecard_template.csv)
+13. Scorecard generator script: `python scripts/scorecard_new_week.py --strategy <name> --environment <paper|live_micro|live_scaled|research>`
+14. Strategy research runner: `python scripts/run_strategy_research.py --instrument EUR_USD --tf H1 --start 2023-01-01 --end 2024-01-01` (or add `--demo-bars 2000`)
+15. Universe research runner: `python scripts/run_universe_research.py --instruments EUR_USD,GBP_USD,USD_JPY,XAU_USD --base-tf M15 --wf-windows 8 --min-stability 0.30 --min-trades 2 --max-corr 0.70`
+16. Strategy focus plan: [docs/STRATEGY_FOCUS_PLAN.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/STRATEGY_FOCUS_PLAN.md)
+17. Regime GPU research: `python scripts/run_regime_gpu_research.py --instrument EUR_USD --tf M15 --regimes 4 --gpu auto --demo-bars 3000`
+18. Strategy evidence map: [docs/STRATEGY_EVIDENCE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/STRATEGY_EVIDENCE.md)
+19. Intermarket MTF strategy (cross-pair + multi-timeframe) runs via universe research and appears as `IntermarketMTFConfluence`.
+20. GPU strategy pre-screener:
+   1. Run fast pre-screen: `python scripts/run_gpu_prescreener.py --instrument EUR_USD --tf M15 --start 2022-01-01 --end 2025-12-31 --gpu auto --top-n 20`
+   2. Use shortlist in full walk-forward: `python scripts/run_universe_research.py --instruments EUR_USD,GBP_USD,USD_JPY,XAU_USD --base-tf M15 --candidate-shortlist data/research/<gpu_shortlist.csv>`
+   3. One-command pipeline: `make gpu-universe-pipeline INSTRUMENT=EUR_USD INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD TF=M15 BASE_TF=M15 START=2022-01-01 END=2025-12-31 GPU=auto TOP_N=20 WF_WINDOWS=8 MIN_STABILITY=0.30 MIN_TRADES=2 MAX_CORR=0.70`
+21. Real-time style backtester pipeline:
+   1. `python scripts/run_realtime_backtest.py --instrument EUR_USD --tf M15 --start 2024-01-01 --end 2024-12-31 --fill-mode next_open`
+   2. Make target: `make realtime-backtest INSTRUMENT=EUR_USD TF=M15 FILL_MODE=next_open`
+   3. Optional state snapshots:
+      1. `--state-snapshot-path data/research/state_snapshots.jsonl --snapshot-every-bars 1`
+22. Runtime regime classifier + auto strategy selection:
+   1. Generate runtime model: `python scripts/run_regime_gpu_research.py --instrument EUR_USD --tf M15 --gpu auto`
+   2. Run regime strategy selection (default: ensemble decision): `python scripts/run_regime_runtime_backtest.py --model-json data/research/<...>_runtime_model.json --instrument EUR_USD --tf M15 --start 2025-01-01 --end 2025-12-31 --fill-mode next_open --decision-mode ensemble`
+   3. Router fallback mode: `--decision-mode router`
+23. Working strategies report: [docs/WORKING_STRATEGIES.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/WORKING_STRATEGIES.md)
+24. XAU breakout-only strategy spec: [docs/XAU_BREAKOUT_STRATEGY.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/XAU_BREAKOUT_STRATEGY.md)
+25. Execution control commands:
+   1. `make exec-kill-on` / `make exec-kill-off`
+   2. `make exec-shadow-on` / `make exec-shadow-off`
+26. Live execution guardrail:
+   1. In `live` env, broker execution is blocked unless `EXECUTION_LIVE_ENABLED=true`.
+   2. Use shadow mode for safe dry runs.
+27. Operator status API:
+   1. Start: `make exec-status-api PORT=8010`
+   2. Health: `GET /health`
+   3. Safety state: `GET /execution/state`
 
-## Core Components
+## Core Streams
+Configured in `config/system.yaml`:
+1. `stream:market_data`
+2. `stream:signals`
+3. `stream:risk_checks`
+4. `stream:orders`
+5. `stream:executions`
+6. `stream:alerts`
 
-### Data Models (`shared/models.py`)
+## Safety Notes
+1. `config/oanda.yaml` currently supports `practice` and `live`.
+2. Use `practice` for development and validation.
+3. Do not route to `live` without explicit approval and full test checks.
+4. Enforce controls in [AGENTS.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/AGENTS.md).
 
-Pydantic models for type-safe data handling:
-- `MarketTick`: Normalized market data
-- `TradeSignal`: Strategy-generated signals
-- `RiskCheckResult`: Risk approval results
-- `Order`: Order to be executed
-- `Execution`: Fill reports
-- `Position`: Current positions
-- `HealthMetric`: System health metrics
-
-### Message Bus (`shared/message_bus.py`)
-
-Redis Streams-based pub/sub system:
-- Async publish/subscribe
-- Consumer groups for reliable delivery
-- Named streams for different message types
-- Automatic reconnection
-
-### Configuration (`shared/config.py`)
-
-YAML-based configuration with environment variable substitution:
-- System settings
-- Oanda API configuration
-- Risk limits
-- Strategy parameters
-- Monitoring thresholds
-
-### Logging (`shared/logging_config.py`)
-
-Structured JSON logging:
-- Console output (human-readable in dev)
-- File rotation
-- Error-specific log file
-- Ready for ELK stack integration
-
-## Testing the Message Bus
-
-Test the message bus manually:
-
-```python
-import asyncio
-from shared.message_bus import MessageBus
-from shared.config import Config
-
-async def test():
-    config = Config.load()
-    bus = MessageBus(config)
-    await bus.connect()
-
-    # Publish a message
-    await bus.publish('market_data', {'test': 'hello', 'value': 123})
-
-    # Subscribe and receive
-    async for msg in bus.subscribe('market_data'):
-        print(f"Received: {msg}")
-        break
-
-    await bus.disconnect()
-
-asyncio.run(test())
-```
-
-## Configuration Files
-
-### System Configuration (`config/system.yaml`)
-- Redis connection settings
-- InfluxDB connection
-- Prometheus settings
-- Logging configuration
-
-### Oanda Configuration (`config/oanda.yaml`)
-- API credentials (via environment variables)
-- Practice/live environment selection
-- Instruments to trade
-- Connection settings
-
-### Risk Limits (`config/risk_limits.yaml`)
-- Daily loss limits
-- Position size limits
-- Stop loss requirements
-- Circuit breaker settings
-
-### Strategies (`config/strategies.yaml`)
-- Strategy definitions
-- Parameters
-- Backtest results
-
-### Monitoring (`config/monitoring.yaml`)
-- Health check intervals
-- Alert thresholds
-- Metrics collection settings
-
-## Acceptance Criteria
-
-Phase 1 is complete when:
-- [x] All directory structure created
-- [x] All Pydantic models defined and validated
-- [x] Redis message bus working (can publish/subscribe)
-- [x] Configuration loads from YAML + env vars
-- [x] Logging outputs structured JSON
-- [x] Docker Compose brings up all services successfully
-- [x] All unit tests pass
-- [x] Can create a test message flow
-- [x] README documents setup and usage
-
-## Next Steps (Phase 2+)
-
-Future phases will implement:
-- **Phase 2**: Market Data Agent (Oanda streaming, normalization, storage)
-- **Phase 3**: Monitoring Agent (health checks, metrics, alerting)
-- **Phase 4**: Strategy Agent (signal generation, backtesting)
-- **Phase 5**: Risk Agent (pre-trade checks, position monitoring)
-- **Phase 6**: Execution Agent (order management, Oanda execution)
-- **Phase 7**: Integration testing and optimization
-- **Phase 8**: Production deployment
-
-## Troubleshooting
-
-### Redis Connection Issues
-```bash
-# Check Redis is running
-docker-compose ps redis
-
-# View Redis logs
-docker-compose logs redis
-
-# Test Redis connection
-redis-cli ping
-```
-
-### InfluxDB Connection Issues
-```bash
-# Check InfluxDB is running
-docker-compose ps influxdb
-
-# View InfluxDB logs
-docker-compose logs influxdb
-
-# Access InfluxDB UI
-open http://localhost:8086
-```
-
-### Test Failures
-```bash
-# Run tests with verbose output
-pytest tests/ -vv
-
-# Run specific test
-pytest tests/test_models.py::TestMarketTick::test_valid_market_tick -v
-
-# Show print statements
-pytest tests/ -v -s
-```
-
-## Security Notes
-
-- Never commit `.env` file with real credentials
-- Use practice environment for development
-- Rotate API tokens regularly
-- Monitor API usage to avoid rate limits
-- Use encrypted connections in production
+## Development Conventions
+1. Keep message schemas aligned with `shared/models.py`.
+2. Update tests when changing risk or execution behavior.
+3. Keep docs current for any stream/contract change.
+4. Prefer non-breaking changes unless a migration plan is documented.
 
 ## License
-
-Proprietary - For authorized use only
-
-## Support
-
-For issues or questions, refer to the implementation guide or contact the development team.
+Proprietary internal project.

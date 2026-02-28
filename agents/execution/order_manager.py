@@ -18,6 +18,7 @@ class OrderManager:
     def __init__(self):
         self.orders: Dict[str, Order] = {}
         self.signal_cache: Dict[str, TradeSignal] = {}
+        self.signal_to_order_id: Dict[str, str] = {}
 
     async def create_order_from_signal(self, signal: TradeSignal) -> Order:
         """
@@ -29,6 +30,16 @@ class OrderManager:
         Returns:
             Order object ready for execution
         """
+        if signal.signal_id in self.signal_to_order_id:
+            existing_order_id = self.signal_to_order_id[signal.signal_id]
+            existing = self.orders.get(existing_order_id)
+            if existing is not None:
+                logger.info(
+                    f"Duplicate signal received, reusing existing order: {existing_order_id}",
+                    extra={"signal_id": signal.signal_id, "order_id": existing_order_id},
+                )
+                return existing
+
         # Cache signal for reference
         self.signal_cache[signal.signal_id] = signal
 
@@ -45,10 +56,12 @@ class OrderManager:
             status=OrderStatus.PENDING,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            oanda_order_id=None
+            oanda_order_id=None,
+            idempotency_key=f"sig:{signal.signal_id}",
         )
 
         self.orders[order.order_id] = order
+        self.signal_to_order_id[signal.signal_id] = order.order_id
 
         logger.info(
             f"Order created from signal: {order.order_id}",
@@ -62,6 +75,10 @@ class OrderManager:
         )
 
         return order
+
+    def has_processed_signal(self, signal_id: str) -> bool:
+        """Return True if a signal already has an internal order."""
+        return signal_id in self.signal_to_order_id
 
     async def update_order_status(
         self,

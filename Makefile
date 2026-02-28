@@ -3,6 +3,19 @@
 .PHONY: phase4 phase4-indicators phase4-ma phase4-rsi phase4-tests phase4-agent phase4-live phase4-signal phase4-backtest
 .PHONY: phase6 phase6-tests phase6-execution phase6-agent
 .PHONY: phase7 phase7-integration phase7-performance phase7-stress phase7-failover phase7-security phase7-all
+.PHONY: scorecard-new scorecard-report
+.PHONY: strategy-research
+.PHONY: universe-research
+.PHONY: regime-gpu-research
+.PHONY: gpu-prescreener
+.PHONY: gpu-universe-pipeline
+.PHONY: realtime-backtest
+.PHONY: regime-runtime-backtest
+.PHONY: train-mtf-regime
+.PHONY: xau-breakout-backtest
+.PHONY: xau-breakout-opt
+.PHONY: exec-kill-on exec-kill-off exec-shadow-on exec-shadow-off
+.PHONY: exec-status-api
 
 deps:
 	python -m pip install -r requirements.txt
@@ -153,3 +166,171 @@ phase7-security:
 
 phase7-all: phase7-integration phase7-performance phase7-stress phase7-failover phase7-security
 	@echo "Phase 7: all validation complete"
+
+# Scorecard automation
+# Example:
+# make scorecard-new STRATEGY=MA_Crossover_EURUSD ENV=paper REVIEWER=ops_lead VERSION=1.0.0
+scorecard-new:
+	@test -n "$(STRATEGY)" || (echo "Missing STRATEGY=<name>" && exit 1)
+	@test -n "$(ENV)" || (echo "Missing ENV=<research|paper|live_micro|live_scaled>" && exit 1)
+	python scripts/scorecard_new_week.py --strategy "$(STRATEGY)" --environment "$(ENV)" $(if $(REVIEWER),--reviewer "$(REVIEWER)",) $(if $(VERSION),--version "$(VERSION)",) $(if $(WEEK),--week "$(WEEK)",)
+
+# Example:
+# make scorecard-report
+# make scorecard-report WEEK=2026-W09
+scorecard-report:
+	python scripts/scorecard_report.py $(if $(WEEK),--week "$(WEEK)",)
+
+# Example:
+# make strategy-research INSTRUMENT=EUR_USD TF=H1 START=2023-01-01 END=2024-01-01
+strategy-research:
+	python scripts/run_strategy_research.py \
+		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
+		--tf "$(if $(TF),$(TF),H1)" \
+		--start "$(if $(START),$(START),2023-01-01)" \
+		--end "$(if $(END),$(END),2024-01-01)" \
+		$(if $(DEMO_BARS),--demo-bars "$(DEMO_BARS)",)
+
+# Example:
+# make universe-research INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD BASE_TF=M15 WF_WINDOWS=4 DEMO_BARS=2000 MIN_STABILITY=0.25 MIN_TRADES=1 MAX_CORR=0.75 INTERMARKET_SWEEP=1 WORKERS=4
+universe-research:
+	python scripts/run_universe_research.py \
+		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),EUR_USD,GBP_USD,USD_JPY,XAU_USD)" \
+		--base-tf "$(if $(BASE_TF),$(BASE_TF),M15)" \
+		--start "$(if $(START),$(START),2023-01-01)" \
+		--end "$(if $(END),$(END),2024-01-01)" \
+		$(if $(WF_WINDOWS),--wf-windows "$(WF_WINDOWS)",) \
+		$(if $(MIN_STABILITY),--min-stability "$(MIN_STABILITY)",) \
+		$(if $(MIN_TRADES),--min-trades "$(MIN_TRADES)",) \
+		$(if $(MAX_CORR),--max-corr "$(MAX_CORR)",) \
+		$(if $(INTERMARKET_SWEEP),--intermarket-sweep,) \
+		$(if $(WORKERS),--workers "$(WORKERS)",) \
+		$(if $(VOL_TARGETING),--vol-targeting,) \
+		$(if $(TARGET_ANNUAL_VOL),--target-annual-vol "$(TARGET_ANNUAL_VOL)",) \
+		$(if $(VOL_LOOKBACK_BARS),--vol-lookback-bars "$(VOL_LOOKBACK_BARS)",) \
+		$(if $(MAX_EXPOSURE_PCT),--max-exposure-pct "$(MAX_EXPOSURE_PCT)",) \
+		$(if $(MAX_QUANTITY),--max-quantity "$(MAX_QUANTITY)",) \
+		$(if $(CANDIDATE_SHORTLIST),--candidate-shortlist "$(CANDIDATE_SHORTLIST)",) \
+		$(if $(DEMO_BARS),--demo-bars "$(DEMO_BARS)",)
+
+# Example:
+# make regime-gpu-research INSTRUMENT=EUR_USD TF=M15 START=2023-01-01 END=2024-01-01 REGIMES=4 GPU=auto DEMO_BARS=3000
+regime-gpu-research:
+	python scripts/run_regime_gpu_research.py \
+		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
+		--tf "$(if $(TF),$(TF),M15)" \
+		--start "$(if $(START),$(START),2023-01-01)" \
+		--end "$(if $(END),$(END),2024-01-01)" \
+		--regimes "$(if $(REGIMES),$(REGIMES),4)" \
+		--gpu "$(if $(GPU),$(GPU),auto)" \
+		$(if $(DEMO_BARS),--demo-bars "$(DEMO_BARS)",)
+
+# Example:
+# make gpu-prescreener INSTRUMENT=EUR_USD TF=M15 START=2022-01-01 END=2025-12-31 GPU=auto TOP_N=20
+gpu-prescreener:
+	python scripts/run_gpu_prescreener.py \
+		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
+		--tf "$(if $(TF),$(TF),M15)" \
+		--start "$(if $(START),$(START),2023-01-01)" \
+		--end "$(if $(END),$(END),2024-01-01)" \
+		--gpu "$(if $(GPU),$(GPU),auto)" \
+		--top-n "$(if $(TOP_N),$(TOP_N),20)" \
+		$(if $(DEMO_BARS),--demo-bars "$(DEMO_BARS)",)
+
+# Example:
+# make gpu-universe-pipeline INSTRUMENT=EUR_USD INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD TF=M15 BASE_TF=M15 START=2022-01-01 END=2025-12-31 GPU=auto TOP_N=20 WF_WINDOWS=8 MIN_STABILITY=0.30 MIN_TRADES=2 MAX_CORR=0.70 WORKERS=4
+gpu-universe-pipeline:
+	set -e; \
+	python scripts/run_gpu_prescreener.py \
+		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
+		--tf "$(if $(TF),$(TF),M15)" \
+		--start "$(if $(START),$(START),2023-01-01)" \
+		--end "$(if $(END),$(END),2024-01-01)" \
+		--gpu "$(if $(GPU),$(GPU),auto)" \
+		--top-n "$(if $(TOP_N),$(TOP_N),20)" \
+		$(if $(DEMO_BARS),--demo-bars "$(DEMO_BARS)",); \
+	SHORTLIST=$$(ls -t data/research/gpu_prescreener_"$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)"_"$(if $(TF),$(TF),M15)"_*_shortlist.csv 2>/dev/null | head -n 1); \
+	if [ -z "$$SHORTLIST" ]; then echo "No GPU shortlist found in data/research"; exit 1; fi; \
+	echo "Using shortlist: $$SHORTLIST"; \
+	python scripts/run_universe_research.py \
+		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),EUR_USD,GBP_USD,USD_JPY,XAU_USD)" \
+		--base-tf "$(if $(BASE_TF),$(BASE_TF),M15)" \
+		--start "$(if $(START),$(START),2023-01-01)" \
+		--end "$(if $(END),$(END),2024-01-01)" \
+		--candidate-shortlist "$$SHORTLIST" \
+		$(if $(WF_WINDOWS),--wf-windows "$(WF_WINDOWS)",) \
+		$(if $(MIN_STABILITY),--min-stability "$(MIN_STABILITY)",) \
+		$(if $(MIN_TRADES),--min-trades "$(MIN_TRADES)",) \
+		$(if $(MAX_CORR),--max-corr "$(MAX_CORR)",) \
+		$(if $(INTERMARKET_SWEEP),--intermarket-sweep,) \
+		$(if $(WORKERS),--workers "$(WORKERS)",) \
+		$(if $(VOL_TARGETING),--vol-targeting,) \
+		$(if $(TARGET_ANNUAL_VOL),--target-annual-vol "$(TARGET_ANNUAL_VOL)",) \
+		$(if $(VOL_LOOKBACK_BARS),--vol-lookback-bars "$(VOL_LOOKBACK_BARS)",) \
+		$(if $(MAX_EXPOSURE_PCT),--max-exposure-pct "$(MAX_EXPOSURE_PCT)",) \
+		$(if $(MAX_QUANTITY),--max-quantity "$(MAX_QUANTITY)",) \
+		$(if $(DEMO_BARS),--demo-bars "$(DEMO_BARS)",)
+
+# Example:
+# make realtime-backtest INSTRUMENT=EUR_USD TF=M15 START=2024-01-01 END=2024-12-31 FILL_MODE=next_open
+realtime-backtest:
+	./.venv/bin/python scripts/run_realtime_backtest.py \
+		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
+		--tf "$(if $(TF),$(TF),M15)" \
+		--start "$(if $(START),$(START),2024-01-01)" \
+		--end "$(if $(END),$(END),2024-12-31)" \
+		--fill-mode "$(if $(FILL_MODE),$(FILL_MODE),next_open)" \
+		$(if $(STATE_SNAPSHOT_PATH),--state-snapshot-path "$(STATE_SNAPSHOT_PATH)",) \
+		$(if $(SNAPSHOT_EVERY_BARS),--snapshot-every-bars "$(SNAPSHOT_EVERY_BARS)",)
+
+# Example:
+# make regime-runtime-backtest MODEL_JSON=data/research/regime_research_EUR_USD_M15_<stamp>_runtime_model.json INSTRUMENT=EUR_USD TF=M15 START=2025-01-01 END=2025-12-31
+regime-runtime-backtest:
+	./.venv/bin/python scripts/run_regime_runtime_backtest.py \
+		--model-json "$(MODEL_JSON)" \
+		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
+		--tf "$(if $(TF),$(TF),M15)" \
+		--start "$(if $(START),$(START),2025-01-01)" \
+		--end "$(if $(END),$(END),2025-12-31)" \
+		--fill-mode "$(if $(FILL_MODE),$(FILL_MODE),next_open)" \
+		--decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)"
+
+# Example:
+# make train-mtf-regime INSTRUMENTS=XAU_USD,EUR_USD,GBP_USD START=2022-01-01 END=2024-12-31 GPU=auto
+train-mtf-regime:
+	./.venv/bin/python scripts/train_multiframe_regime_model.py \
+		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),XAU_USD,EUR_USD,GBP_USD)" \
+		--start "$(if $(START),$(START),2022-01-01)" \
+		--end "$(if $(END),$(END),2024-12-31)" \
+		--gpu "$(if $(GPU),$(GPU),auto)"
+
+# Example:
+# make xau-breakout-backtest START=2025-01-01 END=2025-12-31
+xau-breakout-backtest:
+	./.venv/bin/python scripts/run_xau_breakout_backtest.py \
+		--start "$(if $(START),$(START),2025-01-01)" \
+		--end "$(if $(END),$(END),2025-12-31)"
+
+# Example:
+# make xau-breakout-opt TRAIN_START=2023-01-01 TRAIN_END=2024-12-31 TEST_START=2025-01-01 TEST_END=2025-12-31
+xau-breakout-opt:
+	./.venv/bin/python scripts/optimize_xau_breakout.py \
+		--train-start "$(if $(TRAIN_START),$(TRAIN_START),2023-01-01)" \
+		--train-end "$(if $(TRAIN_END),$(TRAIN_END),2024-12-31)" \
+		--test-start "$(if $(TEST_START),$(TEST_START),2025-01-01)" \
+		--test-end "$(if $(TEST_END),$(TEST_END),2025-12-31)"
+
+exec-kill-on:
+	python scripts/execution_control.py --action kill_switch_on --reason "$(if $(REASON),$(REASON),manual kill switch)"
+
+exec-kill-off:
+	python scripts/execution_control.py --action kill_switch_off --reason "$(if $(REASON),$(REASON),resume execution)"
+
+exec-shadow-on:
+	python scripts/execution_control.py --action shadow_mode_on --reason "$(if $(REASON),$(REASON),enable shadow mode)"
+
+exec-shadow-off:
+	python scripts/execution_control.py --action shadow_mode_off --reason "$(if $(REASON),$(REASON),disable shadow mode)"
+
+exec-status-api:
+	python scripts/execution_status_api.py --host "$(if $(HOST),$(HOST),0.0.0.0)" --port "$(if $(PORT),$(PORT),8010)"

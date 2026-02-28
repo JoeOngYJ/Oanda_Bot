@@ -5,3 +5,14 @@ default:
   symbols:
     - EUR_USD
   timeframe: H1
+  execution:
+    pricing_model: spread_only  # spread_only | oanda_core
+    slippage_pips: 0.2
+    default_spread_pips: 1.5
+    spreads_pips:
+      EUR_USD: 1.4
+      GBP_USD: 2.0
+      USD_JPY: 1.4
+      USD_CAD: 2.2
+      AUD_USD: 1.4
+    core_commission_per_10k_units: 1.0

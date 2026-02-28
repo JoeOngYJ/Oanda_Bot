@@ -14,7 +14,7 @@ class Timeframe(Enum):
     M30 = ("30T", 1800, "M30")
     H1 = ("1H", 3600, "H1")
     H4 = ("4H", 14400, "H4")
-    D1 = ("1D", 86400, "D1")
+    D1 = ("1D", 86400, "D")
 
     def __init__(self, pandas_freq: str, seconds: int, oanda_gran: str):
         self._pandas_freq = pandas_freq
@@ -104,6 +104,9 @@ class Timeframe(Enum):
             ValueError: If granularity doesn't match any timeframe
         """
         gran_upper = gran.strip().upper()
+        # Accept common aliases and normalize to OANDA-native symbols.
+        if gran_upper == "D1":
+            gran_upper = "D"
 
         for tf in cls:
             if tf.to_oanda_granularity().upper() == gran_upper:

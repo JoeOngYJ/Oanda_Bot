@@ -143,6 +143,12 @@ class OandaExecutor:
             }
         }
 
+        if order.idempotency_key:
+            payload["order"]["clientExtensions"] = {
+                "id": order.idempotency_key[:127],
+                "tag": "execution-agent",
+            }
+
         # Add stop loss if specified
         if order.stop_loss:
             payload["order"]["stopLossOnFill"] = {
@@ -194,7 +200,9 @@ class OandaExecutor:
                 fill_price=Decimal(fill_tx["price"]),
                 commission=Decimal(fill_tx.get("financing", "0")),
                 timestamp=self._parse_oanda_time(fill_tx["time"]),
-                oanda_transaction_id=fill_tx["id"]
+                oanda_transaction_id=fill_tx["id"],
+                execution_mode="live",
+                metadata={"raw_fill_transaction": fill_tx},
             )
 
         elif "orderCreateTransaction" in response:

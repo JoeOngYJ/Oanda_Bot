@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OANDA Trading System Overview</title>
+  <style>
+    :root {
+      --bg: #f4f7f7;
+      --card: #ffffff;
+      --ink: #1e2a2f;
+      --muted: #4f666d;
+      --accent: #0f6d7a;
+      --line: #d7e1e4;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+      background: linear-gradient(180deg, #edf3f4 0%, #f8fbfb 100%);
+      color: var(--ink);
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 24px auto;
+      padding: 0 16px 24px;
+    }
+    .hero, .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 8px rgba(12, 38, 44, 0.06);
+      margin-bottom: 14px;
+    }
+    h1, h2 {
+      margin: 0 0 10px 0;
+    }
+    h1 { font-size: 28px; }
+    h2 { font-size: 18px; color: var(--accent); }
+    p, li { line-height: 1.45; color: var(--muted); }
+    ul { margin: 8px 0 0 18px; padding: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border: 1px solid #b8ccd1;
+      border-radius: 999px;
+      font-size: 12px;
+      margin-right: 6px;
+      margin-top: 6px;
+      color: #36545c;
+      background: #f2f8f9;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>OANDA Trading System</h1>
+      <p>Multi-agent FX trading and backtesting platform with Redis Streams, risk gating, execution routing, and monitoring.</p>
+      <span class="pill">Event-driven</span>
+      <span class="pill">OANDA v20</span>
+      <span class="pill">Backtesting + Live Agents</span>
+      <span class="pill">Spread/Fee Modeling</span>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Runtime Agents</h2>
+        <ul>
+          <li>Market data ingestion and normalization</li>
+          <li>Strategy signal generation</li>
+          <li>Risk checks and circuit breaker controls</li>
+          <li>Execution routing and fill tracking</li>
+          <li>Monitoring and alerts</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Backtesting</h2>
+        <ul>
+          <li>Historical data management and resampling</li>
+          <li>Strategy simulation loop</li>
+          <li>Spread + slippage fill pricing</li>
+          <li>Commission models (spread-only/core/flat)</li>
+          <li>SL/TP lifecycle exits</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Infrastructure</h2>
+        <ul>
+          <li>Redis, InfluxDB, Grafana, Prometheus via Docker Compose</li>
+          <li>YAML config + environment-variable substitution</li>
+          <li>Pydantic shared models for contract consistency</li>
+          <li>Extensive test categories for reliability</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Professionalization Roadmap</h2>
+      <ul>
+        <li>Contract hardening between risk and execution events</li>
+        <li>Practice/live config separation and safety gates</li>
+        <li>CI with linting, tests, and release checks</li>
+        <li>Packaging cleanup and controlled path migration</li>
+      </ul>
+      <p>See Markdown docs for details: <code>docs/FEATURE_CATALOG.md</code>, <code>docs/REPO_STRUCTURE.md</code>, <code>docs/PROFESSIONALIZATION_PLAN.md</code>.</p>
+    </section>
+  </div>
+</body>
+</html>
+

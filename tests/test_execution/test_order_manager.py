@@ -2,6 +2,7 @@
 """Tests for OrderManager"""
 
 import pytest
+import copy
 from datetime import datetime
 from decimal import Decimal
 
@@ -48,6 +49,7 @@ async def test_create_order_from_signal(order_manager, sample_signal):
     assert order.order_type == OrderType.MARKET
     assert order.status == OrderStatus.PENDING
     assert order.order_id is not None
+    assert order.idempotency_key == f"sig:{sample_signal.signal_id}"
 
 
 @pytest.mark.asyncio
@@ -82,8 +84,10 @@ async def test_get_order(order_manager, sample_signal):
 @pytest.mark.asyncio
 async def test_get_orders_by_status(order_manager, sample_signal):
     """Test filtering orders by status"""
+    signal2 = copy.deepcopy(sample_signal)
+    signal2.signal_id = "signal-456"
     order1 = await order_manager.create_order_from_signal(sample_signal)
-    order2 = await order_manager.create_order_from_signal(sample_signal)
+    order2 = await order_manager.create_order_from_signal(signal2)
 
     await order_manager.update_order_status(order1.order_id, OrderStatus.SUBMITTED)
 
@@ -94,3 +98,13 @@ async def test_get_orders_by_status(order_manager, sample_signal):
     assert len(submitted_orders) == 1
     assert order2.order_id in pending_orders
     assert order1.order_id in submitted_orders
+
+
+@pytest.mark.asyncio
+async def test_duplicate_signal_returns_same_order(order_manager, sample_signal):
+    """Duplicate signal IDs should map to the same order for idempotency."""
+    order1 = await order_manager.create_order_from_signal(sample_signal)
+    order2 = await order_manager.create_order_from_signal(sample_signal)
+
+    assert order1.order_id == order2.order_id
+    assert order_manager.has_processed_signal(sample_signal.signal_id)

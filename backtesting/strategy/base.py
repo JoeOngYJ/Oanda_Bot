@@ -20,7 +20,11 @@ class StrategyBase(ABC):
     def __init__(self, config: Dict):
         self.config = config
         self.name = config.get('name', self.__class__.__name__)
-        self.timeframes = [Timeframe[tf] for tf in config.get('timeframes', ['H1'])]
+        raw_timeframes = config.get('timeframes', ['H1'])
+        self.timeframes = [
+            tf if isinstance(tf, Timeframe) else Timeframe[tf]
+            for tf in raw_timeframes
+        ]
         
         # Internal state (strategy-specific)
         self._state: Dict = {}
@@ -57,6 +61,14 @@ class StrategyBase(ABC):
     def on_backtest_end(self):
         """Called once at backtest completion (optional override)"""
         pass
+
+    def on_market_bar(self, bar: OHLCVBar):
+        """
+        Optional hook for strategies that need cross-instrument context.
+
+        Called for every market bar fed into the engine. Default no-op.
+        """
+        return None
     
     def get_state(self) -> Dict:
         """Return internal state for debugging/logging"""

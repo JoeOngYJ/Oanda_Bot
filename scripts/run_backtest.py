@@ -24,8 +24,14 @@ def main():
         },
         'execution': {
             'initial_capital': 10000,
-            'slippage_pips': 1,
-            'commission_per_trade': 2.0
+            'slippage_pips': 0.2,
+            'pricing_model': 'oanda_core',  # spread_only | oanda_core
+            'spreads_pips': {
+                'EUR_USD': 1.4,
+                'GBP_USD': 2.0,
+                'USD_JPY': 1.4,
+            },
+            'core_commission_per_10k_units': 1.0,
         }
     }
     

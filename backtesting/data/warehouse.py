@@ -64,7 +64,13 @@ class DataWarehouse:
                 return pd.read_csv(csv_path, index_col=0, parse_dates=True)
             return None
 
-        df = pd.read_parquet(path)
+        try:
+            df = pd.read_parquet(path)
+        except Exception:
+            csv_path = path.with_suffix(".csv")
+            if not csv_path.exists():
+                raise
+            df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
         if start is None and end is None:
             return df
 

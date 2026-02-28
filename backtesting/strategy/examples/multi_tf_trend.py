@@ -1,12 +1,14 @@
 # backtesting/strategy/examples/multi_tf_trend.py
 
+from typing import Dict, Optional
+
+import pandas as pd
+
+from backtesting.core.timeframe import Timeframe
+from backtesting.data.models import OHLCVBar
+from backtesting.features.compute.cpu_engine import IndicatorEngine
 from backtesting.strategy.base import StrategyBase
 from backtesting.strategy.signal import Signal, SignalDirection
-from backtesting.data.models import OHLCVBar
-from backtesting.core.timeframe import Timeframe
-from backtesting.features.compute.cpu_engine import IndicatorEngine
-from typing import Optional, Dict
-import pandas as pd
 
 class MultiTimeframeTrendStrategy(StrategyBase):
     """
@@ -34,6 +36,7 @@ class MultiTimeframeTrendStrategy(StrategyBase):
         
         # Indicator engine
         self.engine = IndicatorEngine()
+        self.entry_timeframe = min(self.timeframes, key=lambda tf: tf.seconds)
     
     def get_required_warmup_bars(self) -> Dict[Timeframe, int]:
         """Need 200 bars for slow EMA on all timeframes"""
@@ -52,11 +55,16 @@ class MultiTimeframeTrendStrategy(StrategyBase):
             'volume': bar.volume
         }], index=[bar.timestamp])
         
-        self._buffers[tf] = pd.concat([self._buffers[tf], new_row])
-        self._buffers[tf] = self._buffers[tf].tail(self.ema_slow_period + 50)  # Keep extra
+        buf = self._buffers[tf]
+        if buf.empty:
+            self._buffers[tf] = new_row
+        else:
+            merged = pd.concat([buf, new_row], axis=0)
+            # Keep only latest rows and de-duplicate timestamps to avoid pandas concat warnings.
+            self._buffers[tf] = merged[~merged.index.duplicated(keep="last")].tail(self.ema_slow_period + 50)
         
-        # Only generate signals on base timeframe (M15)
-        if tf != Timeframe.M15:
+        # Only generate signals on the execution timeframe (smallest configured timeframe).
+        if tf != self.entry_timeframe:
             return None
         
         # Check if we have enough data
@@ -85,11 +93,11 @@ class MultiTimeframeTrendStrategy(StrategyBase):
         if not (all_bullish or all_bearish):
             return None  # No alignment
         
-        # Check entry conditions on M15
-        m15_close = self._buffers[Timeframe.M15]['close'].iloc[-1]
-        m15_ema_fast = trends[Timeframe.M15]['ema_fast']
+        # Check entry conditions on execution timeframe.
+        entry_close = self._buffers[self.entry_timeframe]["close"].iloc[-1]
+        entry_ema_fast = trends[self.entry_timeframe]["ema_fast"]
         
-        if all_bullish and m15_close > m15_ema_fast:
+        if all_bullish and entry_close > entry_ema_fast:
             # Price above fast EMA in uptrend - LONG signal
             return Signal(
                 timestamp=bar.timestamp,
@@ -97,14 +105,14 @@ class MultiTimeframeTrendStrategy(StrategyBase):
                 direction=SignalDirection.LONG,
                 strategy_name=self.name,
                 entry_price=bar.close,
-                stop_loss=m15_ema_fast * 0.998,  # 0.2% below EMA
+                stop_loss=entry_ema_fast * 0.998,  # 0.2% below EMA
                 take_profit=bar.close * 1.015,  # 1.5% target
-                timeframe=Timeframe.M15,
+                timeframe=self.entry_timeframe,
                 confidence=0.8,
                 metadata=trends
             )
-        
-        elif all_bearish and m15_close < m15_ema_fast:
+
+        elif all_bearish and entry_close < entry_ema_fast:
             # Price below fast EMA in downtrend - SHORT signal
             return Signal(
                 timestamp=bar.timestamp,
@@ -112,9 +120,9 @@ class MultiTimeframeTrendStrategy(StrategyBase):
                 direction=SignalDirection.SHORT,
                 strategy_name=self.name,
                 entry_price=bar.close,
-                stop_loss=m15_ema_fast * 1.002,
+                stop_loss=entry_ema_fast * 1.002,
                 take_profit=bar.close * 0.985,
-                timeframe=Timeframe.M15,
+                timeframe=self.entry_timeframe,
                 confidence=0.8,
                 metadata=trends
             )

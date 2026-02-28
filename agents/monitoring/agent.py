@@ -57,6 +57,14 @@ class MonitoringAgent:
         )
         self.cpu_usage = Gauge('cpu_usage_percent', 'CPU usage percentage')
         self.memory_usage = Gauge('memory_usage_percent', 'Memory usage percentage')
+        self.execution_kill_switch = Gauge(
+            'execution_kill_switch_active',
+            'Execution kill switch state (1=active,0=inactive)'
+        )
+        self.execution_shadow_mode = Gauge(
+            'execution_shadow_mode_active',
+            'Execution shadow mode state (1=active,0=inactive)'
+        )
 
         # Components
         self.metrics_collector = MetricsCollector(config)
@@ -83,6 +91,7 @@ class MonitoringAgent:
             asyncio.create_task(self._collect_metrics()),
             asyncio.create_task(self._process_alerts()),
             asyncio.create_task(self._monitor_message_streams()),
+            asyncio.create_task(self._monitor_execution_controls()),
         ]
 
         try:
@@ -178,6 +187,26 @@ class MonitoringAgent:
                 logger.error(f"Stream monitoring error: {e}", exc_info=True)
 
             await asyncio.sleep(10)
+
+    async def _monitor_execution_controls(self):
+        """Track execution control state from control commands and alerts."""
+        # Initialize conservative defaults.
+        self.execution_kill_switch.set(0.0)
+        self.execution_shadow_mode.set(0.0)
+
+        # Track explicit control commands.
+        async for message in self.message_bus.subscribe('execution_control'):
+            if not self.running:
+                break
+            action = str(message.get("action", ""))
+            if action == "kill_switch_on":
+                self.execution_kill_switch.set(1.0)
+            elif action == "kill_switch_off":
+                self.execution_kill_switch.set(0.0)
+            elif action == "shadow_mode_on":
+                self.execution_shadow_mode.set(1.0)
+            elif action == "shadow_mode_off":
+                self.execution_shadow_mode.set(0.0)
 
     async def stop(self):
         """Gracefully stop monitoring agent"""

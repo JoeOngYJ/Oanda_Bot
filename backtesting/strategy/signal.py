@@ -1,63 +1,46 @@
-# backtesting/strategy/base.py
+"""Signal models for backtesting strategy output."""
 
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, List
-from backtesting.data.models import OHLCVBar
-from backtesting.strategy.signal import Signal
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
+from enum import Enum
+from typing import Any, Dict, Optional
+
 from backtesting.core.timeframe import Timeframe
+from backtesting.core.types import InstrumentSymbol
 
-class StrategyBase(ABC):
-    """
-    Abstract base class for all strategies.
-    
-    Design Philosophy:
-    - Strategies are stateful but should not mutate external state
-    - They receive bar updates and emit signals
-    - They do NOT execute trades directly
-    - They can subscribe to multiple timeframes
-    """
-    
-    def __init__(self, config: Dict):
-        self.config = config
-        self.name = config.get('name', self.__class__.__name__)
-        self.timeframes = [Timeframe[tf] for tf in config.get('timeframes', ['H1'])]
-        
-        # Internal state (strategy-specific)
-        self._state: Dict = {}
-    
-    @abstractmethod
-    def on_bar(self, bar: OHLCVBar) -> Optional[Signal]:
-        """
-        Called when a new bar closes on ANY subscribed timeframe.
-        
-        Args:
-            bar: The newly closed bar
-        
-        Returns:
-            Signal if conditions met, else None
-        """
-        pass
-    
-    @abstractmethod
-    def get_required_warmup_bars(self) -> Dict[Timeframe, int]:
-        """
-        Return the number of historical bars needed per timeframe
-        before strategy can generate signals.
-        
-        Example:
-            {Timeframe.H1: 200, Timeframe.D1: 50}
-            (Need 200 H1 bars for SMA-200, 50 D1 bars for trend)
-        """
-        pass
-    
-    def on_backtest_start(self):
-        """Called once at backtest initialization (optional override)"""
-        pass
-    
-    def on_backtest_end(self):
-        """Called once at backtest completion (optional override)"""
-        pass
-    
-    def get_state(self) -> Dict:
-        """Return internal state for debugging/logging"""
-        return self._state.copy()
+
+class SignalDirection(Enum):
+    """Signal direction for order intent."""
+    LONG = "LONG"
+    SHORT = "SHORT"
+
+
+@dataclass
+class Signal:
+    """Backtest trading signal emitted by strategies."""
+
+    timestamp: datetime
+    instrument: InstrumentSymbol
+    direction: SignalDirection
+    strategy_name: str
+    entry_price: Decimal
+    stop_loss: Optional[Decimal]
+    take_profit: Optional[Decimal]
+    timeframe: Timeframe
+    confidence: float
+    quantity: int = 1000
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.entry_price = Decimal(str(self.entry_price))
+        if self.stop_loss is not None:
+            self.stop_loss = Decimal(str(self.stop_loss))
+        if self.take_profit is not None:
+            self.take_profit = Decimal(str(self.take_profit))
+        if self.quantity <= 0:
+            raise ValueError(f"Signal quantity must be positive, got: {self.quantity}")
+        if not (0.0 <= self.confidence <= 1.0):
+            raise ValueError(
+                f"Signal confidence must be between 0 and 1, got: {self.confidence}"
+            )

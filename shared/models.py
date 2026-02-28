@@ -96,6 +96,7 @@ class TradeSignal(BaseModel):
 class RiskCheckResult(BaseModel):
     """Result of risk pre-trade check"""
     signal_id: str
+    signal: Optional[TradeSignal] = None
     approved: bool
     reasons: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
@@ -118,6 +119,7 @@ class Order(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     oanda_order_id: Optional[str] = None
+    idempotency_key: Optional[str] = None
 
 
 class Execution(BaseModel):
@@ -131,6 +133,21 @@ class Execution(BaseModel):
     commission: Decimal = Decimal("0")
     timestamp: datetime = Field(default_factory=utcnow)
     oanda_transaction_id: str
+    execution_mode: Literal["live", "shadow"] = "live"
+    metadata: dict = Field(default_factory=dict)
+
+
+class ExecutionControlCommand(BaseModel):
+    """Control-plane command for execution behavior."""
+    action: Literal[
+        "kill_switch_on",
+        "kill_switch_off",
+        "shadow_mode_on",
+        "shadow_mode_off",
+    ]
+    reason: str = "manual"
+    requested_by: str = "unknown"
+    timestamp: datetime = Field(default_factory=utcnow)
 
 
 class Position(BaseModel):
