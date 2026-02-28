@@ -19,6 +19,7 @@ class Portfolio:
         self.cash = Decimal(str(cash))
         self.positions: Dict[str, Position] = {}
         self.total_fees_paid = Decimal("0")
+        self.total_financing = Decimal("0")
 
     def open_long(self, instrument: str, price: Decimal, quantity: int, commission: Decimal = Decimal("0")):
         self._open(instrument, Decimal(str(price)), abs(quantity), Decimal(str(commission)))
@@ -51,6 +52,12 @@ class Portfolio:
 
         self.cash -= commission
         self.total_fees_paid += commission
+
+    def apply_financing(self, amount: Decimal) -> None:
+        """Apply overnight financing (positive = cost, negative = rebate)."""
+        val = Decimal(str(amount))
+        self.cash -= val
+        self.total_financing += val
 
     def update_on_fill(self, fill):
         pass

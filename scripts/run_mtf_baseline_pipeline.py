@@ -65,6 +65,7 @@ def _parse_runtime_metrics(output: str) -> dict:
         "sharpe": float(grab(r"Sharpe: ([0-9.\-]+)")),
         "max_drawdown_pct": float(grab(r"Max drawdown: ([0-9.]+)%")),
         "fees": float(grab(r"Fees: ([0-9.\-]+)")),
+        "financing": float(grab(r"Financing: ([0-9.\-]+)")),
     }
 
 
@@ -108,6 +109,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-quantity", type=int, default=100000)
     p.add_argument("--max-drawdown-stop-pct", type=float, default=0.20)
     p.add_argument("--daily-loss-limit-pct", type=float, default=0.05)
+    p.add_argument("--financing", choices=["on", "off"], default="on")
+    p.add_argument("--default-financing-long-rate", type=float, default=0.03)
+    p.add_argument("--default-financing-short-rate", type=float, default=0.03)
+    p.add_argument("--rollover-hour-utc", type=int, default=22)
     p.add_argument("--output-dir", default="data/research")
     p.add_argument("--manifest-json", default="", help="Optional manifest path for eval-only mode.")
     return p.parse_args()
@@ -203,6 +208,7 @@ def _evaluate(
         "sharpe",
         "max_drawdown_pct",
         "fees",
+        "financing",
         "status",
         "model_json",
     ]
@@ -240,6 +246,14 @@ def _evaluate(
                     str(args.max_drawdown_stop_pct),
                     "--daily-loss-limit-pct",
                     str(args.daily_loss_limit_pct),
+                    "--financing",
+                    args.financing,
+                    "--default-financing-long-rate",
+                    str(args.default_financing_long_rate),
+                    "--default-financing-short-rate",
+                    str(args.default_financing_short_rate),
+                    "--rollover-hour-utc",
+                    str(args.rollover_hour_utc),
                 ]
                 if args.strategy_params_csv:
                     cmd.extend(["--strategy-params-csv", args.strategy_params_csv])
@@ -259,6 +273,7 @@ def _evaluate(
                         "sharpe": f"{metrics['sharpe']:.4f}",
                         "max_drawdown_pct": f"{metrics['max_drawdown_pct']:.2f}",
                         "fees": f"{metrics['fees']:.2f}",
+                        "financing": f"{metrics['financing']:.2f}",
                         "status": status,
                         "model_json": model_json,
                     }

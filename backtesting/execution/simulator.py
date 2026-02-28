@@ -1,6 +1,7 @@
 # backtesting/execution/simulator.py
 
 from collections import defaultdict, deque
+import datetime as dt
 from math import sqrt
 from typing import Deque, Dict, List, Optional
 from decimal import Decimal
@@ -47,6 +48,13 @@ class ExecutionSimulator:
         min_quantity: int = 1,
         max_quantity: Optional[int] = None,
         base_timeframe_seconds: Optional[int] = None,
+        financing_enabled: bool = False,
+        financing_long_rate_by_instrument: Optional[Dict[str, Decimal]] = None,
+        financing_short_rate_by_instrument: Optional[Dict[str, Decimal]] = None,
+        default_financing_long_rate: Decimal = Decimal("0.03"),
+        default_financing_short_rate: Decimal = Decimal("0.03"),
+        rollover_hour_utc: int = 22,
+        wednesday_triple_rollover: bool = True,
     ):
         self.portfolio = Portfolio(initial_capital)
         self.slippage_model = slippage_model
@@ -64,6 +72,18 @@ class ExecutionSimulator:
         self.min_quantity = max(int(min_quantity), 1)
         self.max_quantity = int(max_quantity) if max_quantity is not None else None
         self.base_timeframe_seconds = int(base_timeframe_seconds) if base_timeframe_seconds else 3600
+        self.financing_enabled = bool(financing_enabled)
+        self.financing_long_rate_by_instrument = {
+            k: Decimal(str(v)) for k, v in (financing_long_rate_by_instrument or {}).items()
+        }
+        self.financing_short_rate_by_instrument = {
+            k: Decimal(str(v)) for k, v in (financing_short_rate_by_instrument or {}).items()
+        }
+        self.default_financing_long_rate = Decimal(str(default_financing_long_rate))
+        self.default_financing_short_rate = Decimal(str(default_financing_short_rate))
+        self.rollover_hour_utc = max(0, min(23, int(rollover_hour_utc)))
+        self.wednesday_triple_rollover = bool(wednesday_triple_rollover)
+        self._last_rollover_key: Optional[dt.date] = None
         self.close_history: Dict[str, Deque[Decimal]] = defaultdict(
             lambda: deque(maxlen=self.volatility_lookback_bars + 2)
         )
@@ -87,6 +107,7 @@ class ExecutionSimulator:
         """
         instrument = str(bar.instrument)
         self.close_history[instrument].append(Decimal(str(bar.close)))
+        self._apply_rollover_financing(bar)
         filled_this_bar = []
         
         for order in self.pending_orders:
@@ -150,6 +171,52 @@ class ExecutionSimulator:
         
         # Check stop loss / take profit on existing positions
         self._check_exits(bar)
+
+    def _rollover_key(self, timestamp) -> dt.date:
+        ts = timestamp
+        if hasattr(ts, "to_pydatetime"):
+            ts = ts.to_pydatetime()
+        if isinstance(ts, dt.datetime):
+            ts_utc = ts if ts.tzinfo is not None else ts.replace(tzinfo=dt.timezone.utc)
+            shifted = ts_utc - dt.timedelta(hours=self.rollover_hour_utc)
+            return shifted.date()
+        # Fallback if unknown timestamp type.
+        return dt.datetime.now(dt.timezone.utc).date()
+
+    def _apply_rollover_financing(self, bar: OHLCVBar) -> None:
+        if not self.financing_enabled:
+            return
+        key = self._rollover_key(bar.timestamp)
+        if self._last_rollover_key is None:
+            self._last_rollover_key = key
+            return
+        if key <= self._last_rollover_key:
+            return
+
+        days = (key - self._last_rollover_key).days
+        for i in range(days):
+            roll_key = self._last_rollover_key + dt.timedelta(days=i + 1)
+            mult = 3 if (self.wednesday_triple_rollover and roll_key.weekday() == 2) else 1
+            self._apply_single_day_financing(multiplier=mult)
+        self._last_rollover_key = key
+
+    def _apply_single_day_financing(self, multiplier: int = 1) -> None:
+        if not self.open_positions:
+            return
+        m = Decimal(str(max(multiplier, 1)))
+        daily_den = Decimal("365")
+        for pos in self.open_positions:
+            inst = pos.instrument
+            px = self.close_history.get(inst)
+            mark = px[-1] if px and len(px) else pos.entry_price
+            notional = Decimal(abs(pos.quantity)) * Decimal(str(mark))
+            if pos.direction == SignalDirection.LONG:
+                annual_rate = self.financing_long_rate_by_instrument.get(inst, self.default_financing_long_rate)
+            else:
+                annual_rate = self.financing_short_rate_by_instrument.get(inst, self.default_financing_short_rate)
+            financing = notional * Decimal(str(annual_rate)) / daily_den * m
+            if financing != 0:
+                self.portfolio.apply_financing(financing)
     
     def _check_fill(self, signal: Signal, bar: OHLCVBar) -> Optional[Decimal]:
         """Check if order should fill on this bar"""

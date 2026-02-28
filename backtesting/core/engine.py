@@ -31,6 +31,7 @@ class BacktestResult:
     max_drawdown: float
     final_equity: float
     total_fees_paid: float
+    total_financing_paid: float = 0.0
     trades: List[Dict] = field(default_factory=list)
     equity_curve: List[float] = field(default_factory=list)
     filled_orders: List[Dict] = field(default_factory=list)
@@ -108,6 +109,7 @@ class BacktestEngine:
             max_drawdown=max_dd,
             final_equity=final_equity,
             total_fees_paid=float(simulator.portfolio.total_fees_paid),
+            total_financing_paid=float(simulator.portfolio.total_financing),
             trades=trades,
             equity_curve=equity_curve,
             filled_orders=simulator.filled_orders,
@@ -211,6 +213,13 @@ class BacktestEngine:
                 else None
             ),
             base_timeframe_seconds=int(config["data"]["base_timeframe"].seconds),
+            financing_enabled=bool(exec_cfg.get("financing_enabled", False)),
+            financing_long_rate_by_instrument=exec_cfg.get("financing_long_rate_by_instrument", {}),
+            financing_short_rate_by_instrument=exec_cfg.get("financing_short_rate_by_instrument", {}),
+            default_financing_long_rate=Decimal(str(exec_cfg.get("default_financing_long_rate", "0.03"))),
+            default_financing_short_rate=Decimal(str(exec_cfg.get("default_financing_short_rate", "0.03"))),
+            rollover_hour_utc=int(exec_cfg.get("rollover_hour_utc", 22)),
+            wednesday_triple_rollover=bool(exec_cfg.get("wednesday_triple_rollover", True)),
         )
 
     @staticmethod

@@ -302,6 +302,10 @@ regime-runtime-backtest:
 		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
 		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
 		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		--financing "$(if $(FINANCING),$(FINANCING),on)" \
+		--default-financing-long-rate "$(if $(DEFAULT_FINANCING_LONG_RATE),$(DEFAULT_FINANCING_LONG_RATE),0.03)" \
+		--default-financing-short-rate "$(if $(DEFAULT_FINANCING_SHORT_RATE),$(DEFAULT_FINANCING_SHORT_RATE),0.03)" \
+		--rollover-hour-utc "$(if $(ROLLOVER_HOUR_UTC),$(ROLLOVER_HOUR_UTC),22)" \
 		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",)
 
 # Example:
@@ -357,6 +361,10 @@ mtf-eval:
 		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
 		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
 		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		--financing "$(if $(FINANCING),$(FINANCING),on)" \
+		--default-financing-long-rate "$(if $(DEFAULT_FINANCING_LONG_RATE),$(DEFAULT_FINANCING_LONG_RATE),0.03)" \
+		--default-financing-short-rate "$(if $(DEFAULT_FINANCING_SHORT_RATE),$(DEFAULT_FINANCING_SHORT_RATE),0.03)" \
+		--rollover-hour-utc "$(if $(ROLLOVER_HOUR_UTC),$(ROLLOVER_HOUR_UTC),22)" \
 		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",) \
 		$(if $(MANIFEST_JSON),--manifest-json "$(MANIFEST_JSON)",)
 
@@ -385,6 +393,10 @@ mtf-pipeline:
 		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
 		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
 		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		--financing "$(if $(FINANCING),$(FINANCING),on)" \
+		--default-financing-long-rate "$(if $(DEFAULT_FINANCING_LONG_RATE),$(DEFAULT_FINANCING_LONG_RATE),0.03)" \
+		--default-financing-short-rate "$(if $(DEFAULT_FINANCING_SHORT_RATE),$(DEFAULT_FINANCING_SHORT_RATE),0.03)" \
+		--rollover-hour-utc "$(if $(ROLLOVER_HOUR_UTC),$(ROLLOVER_HOUR_UTC),22)" \
 		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",)
 
 # Example:
@@ -422,6 +434,10 @@ xau-mtf-dev:
 		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
 		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
 		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		--financing "$(if $(FINANCING),$(FINANCING),on)" \
+		--default-financing-long-rate "$(if $(DEFAULT_FINANCING_LONG_RATE),$(DEFAULT_FINANCING_LONG_RATE),0.03)" \
+		--default-financing-short-rate "$(if $(DEFAULT_FINANCING_SHORT_RATE),$(DEFAULT_FINANCING_SHORT_RATE),0.03)" \
+		--rollover-hour-utc "$(if $(ROLLOVER_HOUR_UTC),$(ROLLOVER_HOUR_UTC),22)" \
 		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",)
 
 # Example:

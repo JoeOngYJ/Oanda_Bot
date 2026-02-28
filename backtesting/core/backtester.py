@@ -138,6 +138,7 @@ class Backtester:
             max_drawdown=max_dd,
             final_equity=final_equity,
             total_fees_paid=float(simulator.portfolio.total_fees_paid),
+            total_financing_paid=float(simulator.portfolio.total_financing),
             trades=trades,
             equity_curve=equity_curve,
             filled_orders=simulator.filled_orders,

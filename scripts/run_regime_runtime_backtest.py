@@ -51,6 +51,10 @@ def parse_args():
     p.add_argument("--max-quantity", type=int, default=100000)
     p.add_argument("--max-drawdown-stop-pct", type=float, default=0.20)
     p.add_argument("--daily-loss-limit-pct", type=float, default=0.05)
+    p.add_argument("--financing", choices=["on", "off"], default="on")
+    p.add_argument("--default-financing-long-rate", type=float, default=0.03)
+    p.add_argument("--default-financing-short-rate", type=float, default=0.03)
+    p.add_argument("--rollover-hour-utc", type=int, default=22)
     p.add_argument(
         "--strategy-params-csv",
         default="",
@@ -567,6 +571,24 @@ def main() -> int:
             "core_commission_per_10k_units": 1.0,
             "min_quantity": int(args.min_quantity),
             "max_quantity": int(args.max_quantity),
+            "financing_enabled": args.financing == "on",
+            "default_financing_long_rate": float(args.default_financing_long_rate),
+            "default_financing_short_rate": float(args.default_financing_short_rate),
+            "rollover_hour_utc": int(args.rollover_hour_utc),
+            "wednesday_triple_rollover": True,
+            # Annualized financing assumptions; positive values are costs.
+            "financing_long_rate_by_instrument": {
+                "EUR_USD": 0.025,
+                "GBP_USD": 0.03,
+                "USD_JPY": 0.015,
+                "XAU_USD": 0.10,
+            },
+            "financing_short_rate_by_instrument": {
+                "EUR_USD": 0.02,
+                "GBP_USD": 0.025,
+                "USD_JPY": 0.015,
+                "XAU_USD": 0.08,
+            },
         },
     }
 
@@ -590,6 +612,7 @@ def main() -> int:
     print(f"Sharpe: {result.sharpe_ratio:.4f}")
     print(f"Max drawdown: {result.max_drawdown:.2%}")
     print(f"Fees: {result.total_fees_paid:.2f}")
+    print(f"Financing: {result.total_financing_paid:.2f}")
     print(f"Regime counts: {regime_predictor.regime_counts}")
     print(f"Regime->strategy: {model.regime_to_strategy}")
     print(f"Decision mode: {args.decision_mode}")
@@ -601,6 +624,11 @@ def main() -> int:
         f"max_notional_exposure_pct={args.max_notional_exposure_pct}, "
         f"min_quantity={args.min_quantity}, max_quantity={args.max_quantity}, "
         f"max_drawdown_stop_pct={args.max_drawdown_stop_pct}, daily_loss_limit_pct={args.daily_loss_limit_pct}"
+    )
+    print(
+        "Financing config: "
+        f"enabled={args.financing}, rollover_hour_utc={args.rollover_hour_utc}, "
+        f"default_long_rate={args.default_financing_long_rate}, default_short_rate={args.default_financing_short_rate}"
     )
     print(f"Assigned quantities: {assigned_quantities}")
     print(f"Reference price used: {reference_price_used:.6f} ({reference_price_source})")
