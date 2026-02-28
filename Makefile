@@ -216,7 +216,7 @@ universe-research:
 # Example:
 # make regime-gpu-research INSTRUMENT=EUR_USD TF=M15 START=2023-01-01 END=2024-01-01 REGIMES=4 GPU=auto DEMO_BARS=3000
 regime-gpu-research:
-	python scripts/run_regime_gpu_research.py \
+	./.venv/bin/python scripts/run_regime_gpu_research.py \
 		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
 		--tf "$(if $(TF),$(TF),M15)" \
 		--start "$(if $(START),$(START),2023-01-01)" \
@@ -228,7 +228,7 @@ regime-gpu-research:
 # Example:
 # make gpu-prescreener INSTRUMENT=EUR_USD TF=M15 START=2022-01-01 END=2025-12-31 GPU=auto TOP_N=20
 gpu-prescreener:
-	python scripts/run_gpu_prescreener.py \
+	./.venv/bin/python scripts/run_gpu_prescreener.py \
 		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
 		--tf "$(if $(TF),$(TF),M15)" \
 		--start "$(if $(START),$(START),2023-01-01)" \
@@ -241,7 +241,7 @@ gpu-prescreener:
 # make gpu-universe-pipeline INSTRUMENT=EUR_USD INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD TF=M15 BASE_TF=M15 START=2022-01-01 END=2025-12-31 GPU=auto TOP_N=20 WF_WINDOWS=8 MIN_STABILITY=0.30 MIN_TRADES=2 MAX_CORR=0.70 WORKERS=4
 gpu-universe-pipeline:
 	set -e; \
-	python scripts/run_gpu_prescreener.py \
+	./.venv/bin/python scripts/run_gpu_prescreener.py \
 		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)" \
 		--tf "$(if $(TF),$(TF),M15)" \
 		--start "$(if $(START),$(START),2023-01-01)" \
@@ -252,7 +252,7 @@ gpu-universe-pipeline:
 	SHORTLIST=$$(ls -t data/research/gpu_prescreener_"$(if $(INSTRUMENT),$(INSTRUMENT),EUR_USD)"_"$(if $(TF),$(TF),M15)"_*_shortlist.csv 2>/dev/null | head -n 1); \
 	if [ -z "$$SHORTLIST" ]; then echo "No GPU shortlist found in data/research"; exit 1; fi; \
 	echo "Using shortlist: $$SHORTLIST"; \
-	python scripts/run_universe_research.py \
+	./.venv/bin/python scripts/run_universe_research.py \
 		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),EUR_USD,GBP_USD,USD_JPY,XAU_USD)" \
 		--base-tf "$(if $(BASE_TF),$(BASE_TF),M15)" \
 		--start "$(if $(START),$(START),2023-01-01)" \

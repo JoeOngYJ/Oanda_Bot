@@ -12,7 +12,7 @@ This document summarizes the latest cross-instrument, cross-timeframe regime-run
 6. Timeframes: `M15`, `H1`
 
 Raw sweep file:
-`data/research/regime_runtime_sweep_20260228_133046.csv`
+`data/research/regime_runtime_sweep_20260228_141410.csv`
 
 ## Promotion Gate
 
@@ -41,7 +41,8 @@ A setup is marked `PASS` only if all conditions hold:
 1. High absolute PnL on `USD_JPY` and `XAU_USD` is not deployable because drawdown is catastrophic.
 2. The only setup passing risk-adjusted gate in this sweep is:
    1. `GBP_USD H1` (small but controlled edge).
-3. Current ensemble is over-allocating risk in some instrument/timeframe combinations.
+3. This result is unchanged after retraining runtime models on `2024-01-01` to `2024-12-31`.
+4. Current ensemble is over-allocating risk in some instrument/timeframe combinations.
 
 ## Current Working Strategy (Strict Gate)
 
