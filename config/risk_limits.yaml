@@ -1,0 +1,31 @@
+risk_limits:
+  # Global limits
+  max_daily_loss: 1000.00  # USD
+  max_drawdown: 2000.00    # USD from peak equity
+  max_total_exposure: 50000.00  # USD notional
+
+  # Per-instrument limits
+  per_instrument:
+    max_position_size: 10000  # units
+    max_order_size: 5000      # units per order
+
+  # Per-trade limits
+  max_leverage: 10.0
+  min_account_balance: 5000.00
+
+  # Stop loss requirements
+  require_stop_loss: true
+  max_stop_loss_distance: 0.0050  # 50 pips for majors
+
+  # Position concentration
+  max_correlated_exposure: 0.30  # 30% of equity in correlated pairs
+
+  # Circuit breakers
+  circuit_breaker:
+    consecutive_losses: 5
+    loss_velocity_1h: 500.00  # USD loss in 1 hour triggers halt
+    volatility_spike_threshold: 3.0  # Standard deviations
+
+  # Operational limits
+  max_orders_per_minute: 10
+  max_open_positions: 5

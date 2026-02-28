@@ -1,0 +1,36 @@
+{
+  "strategy": "MA_Crossover_EURUSD",
+  "version": "1.0.0",
+  "instrument": "EUR_USD",
+  "period": "2023-01-01 to 2024-01-01",
+  "total_trades": 87,
+  "winning_trades": 52,
+  "losing_trades": 35,
+  "win_rate": 0.598,
+  "total_pnl": 1250.50,
+  "sharpe_ratio": 1.45,
+  "max_drawdown": 0.08,
+  "avg_trade_duration_hours": 18.5,
+  "parameters": {
+    "fast_period": 10,
+    "slow_period": 30,
+    "signal_threshold": 0.7,
+    "position_size": 1000,
+    "stop_loss_pips": 20,
+    "take_profit_pips": 40
+  },
+  "monthly_returns": {
+    "2023-01": 125.30,
+    "2023-02": 89.20,
+    "2023-03": -45.10,
+    "2023-04": 156.80,
+    "2023-05": 78.90,
+    "2023-06": 112.40,
+    "2023-07": -23.50,
+    "2023-08": 145.60,
+    "2023-09": 98.70,
+    "2023-10": 134.20,
+    "2023-11": 167.50,
+    "2023-12": 210.50
+  }
+}

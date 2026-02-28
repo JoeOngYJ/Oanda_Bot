@@ -1,0 +1,36 @@
+{
+  "strategy": "RSI_MeanReversion_GBPUSD",
+  "version": "1.0.0",
+  "instrument": "GBP_USD",
+  "period": "2023-01-01 to 2024-01-01",
+  "total_trades": 124,
+  "winning_trades": 68,
+  "losing_trades": 56,
+  "win_rate": 0.548,
+  "total_pnl": 980.75,
+  "sharpe_ratio": 1.28,
+  "max_drawdown": 0.12,
+  "avg_trade_duration_hours": 12.3,
+  "parameters": {
+    "rsi_period": 14,
+    "oversold_threshold": 30,
+    "overbought_threshold": 70,
+    "position_size": 1000,
+    "stop_loss_pips": 25,
+    "take_profit_pips": 35
+  },
+  "monthly_returns": {
+    "2023-01": 95.40,
+    "2023-02": 67.80,
+    "2023-03": -78.30,
+    "2023-04": 112.50,
+    "2023-05": 45.60,
+    "2023-06": 89.20,
+    "2023-07": -56.40,
+    "2023-08": 123.70,
+    "2023-09": 76.50,
+    "2023-10": 145.30,
+    "2023-11": 189.60,
+    "2023-12": 169.85
+  }
+}

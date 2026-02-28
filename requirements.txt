@@ -1,0 +1,24 @@
+# Core trading & system packages
+oandapyV20==0.7.2
+requests==2.31.0
+redis==5.0.1
+influxdb-client==1.38.0
+prometheus-client==0.19.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+pyyaml==6.0.1
+aiohttp==3.9.1
+
+# Data & analysis packages
+numpy==1.26.4          # Compatible with Python 3.10 and mkl packages
+pandas==2.1.4          # Compatible with numpy 1.26.4
+scipy==1.11.4          # Compatible with Python 3.10
+
+# System & utility packages
+psutil==5.9.6
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0

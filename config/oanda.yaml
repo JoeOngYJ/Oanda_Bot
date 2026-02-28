@@ -1,0 +1,29 @@
+oanda:
+  # Use environment variables for sensitive data
+  account_id: "${OANDA_ACCOUNT_ID}"
+  api_token: "${OANDA_API_TOKEN}"
+
+  # Use practice (sandbox) or live
+  environment: "live"
+
+  endpoints:
+    practice:
+      api: "https://api-fxpractice.oanda.com"
+      stream: "https://stream-fxpractice.oanda.com"
+    live:
+      api: "https://api-fxtrade.oanda.com"
+      stream: "https://stream-fxtrade.oanda.com"
+
+  # Connection settings
+  timeout: 30
+  max_retries: 3
+  retry_delay: 2.0
+
+  # Instruments to trade
+  instruments:
+    - EUR_USD
+    - GBP_USD
+    - USD_JPY
+
+  # Rate limiting
+  requests_per_second: 100

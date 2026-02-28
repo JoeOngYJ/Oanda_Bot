@@ -1,0 +1,102 @@
+{
+  "dashboard": {
+    "title": "Forex Trading System - Monitoring Dashboard",
+    "tags": ["trading", "forex", "monitoring"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Health Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "cpu_usage_percent",
+            "legendFormat": "CPU Usage"
+          },
+          {
+            "expr": "memory_usage_percent",
+            "legendFormat": "Memory Usage"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Component Health Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "component_health",
+            "legendFormat": "{{component}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Market Data Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(market_data_latency_seconds_sum[5m]) / rate(market_data_latency_seconds_count[5m])",
+            "legendFormat": "Avg Latency"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Active Positions",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "active_positions",
+            "legendFormat": "Open Positions"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Daily P&L",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "daily_pnl_usd",
+            "legendFormat": "P&L (USD)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Error Count by Component",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(errors_total[5m])",
+            "legendFormat": "{{component}} - {{error_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Order Execution Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(order_execution_seconds_bucket[5m]))",
+            "legendFormat": "95th Percentile"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      }
+    ],
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

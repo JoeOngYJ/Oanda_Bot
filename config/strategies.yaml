@@ -1,0 +1,38 @@
+strategies:
+  - name: "MA_Crossover_EURUSD"
+    version: "1.0.0"
+    enabled: true
+    strategy_class: "MovingAverageCrossover"
+    instruments:
+      - EUR_USD
+    parameters:
+      fast_period: 10
+      slow_period: 30
+      signal_threshold: 0.7
+      position_size: 1000
+      stop_loss_pips: 20
+      take_profit_pips: 40
+    backtest_results:
+      sharpe_ratio: 1.45
+      max_drawdown: 0.08
+      win_rate: 0.58
+      tested_period: "2023-01-01 to 2024-01-01"
+
+  - name: "RSI_MeanReversion_GBPUSD"
+    version: "1.0.0"
+    enabled: true
+    strategy_class: "RSIMeanReversion"
+    instruments:
+      - GBP_USD
+    parameters:
+      rsi_period: 14
+      oversold_threshold: 30
+      overbought_threshold: 70
+      position_size: 1000
+      stop_loss_pips: 25
+      take_profit_pips: 50
+    backtest_results:
+      sharpe_ratio: 1.32
+      max_drawdown: 0.12
+      win_rate: 0.62
+      tested_period: "2023-01-01 to 2024-01-01"

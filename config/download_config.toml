@@ -1,0 +1,30 @@
+# download_config.toml
+# Configuration for the download CLI. Edit the fields below to control
+# which instrument/timeframe/date-range are downloaded or imported.
+
+# Base data directory where parquet files will be stored (relative to project root)
+data_dir = "data/backtesting"
+
+# Instrument to download. For XAU/USD (spot gold vs USD) OANDA uses XAU_USD
+instrument = "XAU_USD"
+
+# Timeframe / granularity. Valid OANDA granularities: S5, S10, S15, S30,
+# M1, M2, M4, M5, M10, M15, M30, H1, H2, H3, H4, H6, H8, H12, D, W, M
+tf = "H1"
+
+# Optional ISO datetimes (UTC). If omitted, CLI will use sensible defaults
+# (start omitted -> most-recent / end -> now). Example: 2024-01-01T00:00:00
+# start = "2025-01-01T00:00:00"
+# end = "2025-12-31T23:59:59"
+
+# If true the downloader will *not* force a re-download of existing data.
+# This repo's DataManager already skips downloads when cached data exists
+# unless you pass --force-download (not currently exposed on CLI).
+skip_if_exists = true
+
+[oanda]
+# Provide token and account_id here, or set OANDA_API_TOKEN / OANDA_ACCOUNT_ID
+# in your environment (safer). Do NOT commit real tokens to Git.
+token = ""
+account_id = ""
+environment = "live"

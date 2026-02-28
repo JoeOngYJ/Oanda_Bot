@@ -1,0 +1,38 @@
+monitoring:
+  health_check_interval: 30  # seconds
+
+  alert_thresholds:
+    # Market data feed
+    market_data_latency_warning: 1.0   # seconds
+    market_data_latency_critical: 5.0
+    market_data_stale_warning: 10.0    # seconds since last tick
+    market_data_stale_critical: 30.0
+
+    # Execution
+    order_fill_time_warning: 2.0       # seconds
+    order_fill_time_critical: 10.0
+    order_rejection_rate_warning: 0.05 # 5%
+    order_rejection_rate_critical: 0.15
+
+    # System resources
+    cpu_usage_warning: 70.0            # percent
+    cpu_usage_critical: 90.0
+    memory_usage_warning: 75.0
+    memory_usage_critical: 90.0
+
+    # Performance
+    strategy_error_rate_warning: 0.01
+    strategy_error_rate_critical: 0.05
+
+  alerting:
+    channels:
+      - type: "log"
+        severity_levels: ["warning", "critical"]
+      - type: "email"
+        severity_levels: ["critical"]
+        recipients:
+          - "ops@example.com"
+
+  metrics:
+    collection_interval: 10  # seconds
+    retention_days: 30

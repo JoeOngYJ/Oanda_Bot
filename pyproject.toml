@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oanda-trading-system"
+version = "0.0.0"
+description = "Skeleton OANDA backtesting system"
+authors = [ { name="Your Name", email="you@example.com" } ]
+
+[project.scripts]
+oanda-download = "oanda_trading_system.cli:main"

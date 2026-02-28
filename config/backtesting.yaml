@@ -1,0 +1,7 @@
+default:
+  start: 2020-01-01
+  end: 2020-12-31
+  initial_cash: 100000
+  symbols:
+    - EUR_USD
+  timeframe: H1
