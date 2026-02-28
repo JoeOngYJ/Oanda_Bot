@@ -12,6 +12,7 @@
 .PHONY: realtime-backtest
 .PHONY: regime-runtime-backtest
 .PHONY: train-mtf-regime
+.PHONY: mtf-prepare-data mtf-train mtf-eval mtf-pipeline mtf-clean
 .PHONY: xau-breakout-backtest
 .PHONY: xau-breakout-opt
 .PHONY: exec-kill-on exec-kill-off exec-shadow-on exec-shadow-off
@@ -310,6 +311,90 @@ train-mtf-regime:
 		--start "$(if $(START),$(START),2022-01-01)" \
 		--end "$(if $(END),$(END),2024-12-31)" \
 		--gpu "$(if $(GPU),$(GPU),auto)"
+
+# Example:
+# make mtf-prepare-data INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD BASE_TF=M15 HTF1=H1 HTF2=H4 PREP_EXTRA_TFS=D1 FULL_START=2015-01-01 OOS_END=2025-12-31 CHUNK_MONTHS=3
+mtf-prepare-data:
+	./.venv/bin/python scripts/run_mtf_baseline_pipeline.py \
+		--mode prepare-data \
+		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),EUR_USD,GBP_USD,USD_JPY,XAU_USD)" \
+		--base-tf "$(if $(BASE_TF),$(BASE_TF),M15)" \
+		--htf-1 "$(if $(HTF1),$(HTF1),H1)" \
+		--htf-2 "$(if $(HTF2),$(HTF2),H4)" \
+		--prepare-extra-tfs "$(if $(PREP_EXTRA_TFS),$(PREP_EXTRA_TFS),D1)" \
+		--full-start "$(if $(FULL_START),$(FULL_START),2015-01-01)" \
+		--oos-end "$(if $(OOS_END),$(OOS_END),2025-12-31)" \
+		--chunk-months "$(if $(CHUNK_MONTHS),$(CHUNK_MONTHS),3)"
+
+# Example:
+# make mtf-train INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD BASE_TF=M15 HTF1=H1 HTF2=H4 FINE_START=2022-01-01 FINE_END=2024-12-31 FULL_START=2015-01-01 FULL_END=2024-12-31 GPU=on
+mtf-train:
+	./.venv/bin/python scripts/run_mtf_baseline_pipeline.py \
+		--mode train \
+		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),EUR_USD,GBP_USD,USD_JPY,XAU_USD)" \
+		--base-tf "$(if $(BASE_TF),$(BASE_TF),M15)" \
+		--htf-1 "$(if $(HTF1),$(HTF1),H1)" \
+		--htf-2 "$(if $(HTF2),$(HTF2),H4)" \
+		--fine-start "$(if $(FINE_START),$(FINE_START),2022-01-01)" \
+		--fine-end "$(if $(FINE_END),$(FINE_END),2024-12-31)" \
+		--full-start "$(if $(FULL_START),$(FULL_START),2015-01-01)" \
+		--full-end "$(if $(FULL_END),$(FULL_END),2024-12-31)" \
+		--gpu "$(if $(GPU),$(GPU),auto)"
+
+# Example:
+# make mtf-eval INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD EVAL_TFS=H1,M15 OOS_START=2025-01-01 OOS_END=2025-12-31 STRATEGY_PARAMS_CSV=data/research/<shortlist.csv>
+mtf-eval:
+	./.venv/bin/python scripts/run_mtf_baseline_pipeline.py \
+		--mode eval \
+		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),EUR_USD,GBP_USD,USD_JPY,XAU_USD)" \
+		--eval-tfs "$(if $(EVAL_TFS),$(EVAL_TFS),H1,M15)" \
+		--oos-start "$(if $(OOS_START),$(OOS_START),2025-01-01)" \
+		--oos-end "$(if $(OOS_END),$(OOS_END),2025-12-31)" \
+		--risk-per-trade-pct "$(if $(RISK_PER_TRADE_PCT),$(RISK_PER_TRADE_PCT),0.01)" \
+		--max-notional-exposure-pct "$(if $(MAX_NOTIONAL_EXPOSURE_PCT),$(MAX_NOTIONAL_EXPOSURE_PCT),1.0)" \
+		--min-quantity "$(if $(MIN_QUANTITY),$(MIN_QUANTITY),1)" \
+		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
+		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
+		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",) \
+		$(if $(MANIFEST_JSON),--manifest-json "$(MANIFEST_JSON)",)
+
+# Example:
+# make mtf-pipeline INSTRUMENTS=EUR_USD,GBP_USD,USD_JPY,XAU_USD BASE_TF=M15 HTF1=H1 HTF2=H4 EVAL_TFS=H1,M15 FINE_START=2022-01-01 FINE_END=2024-12-31 FULL_START=2015-01-01 FULL_END=2024-12-31 OOS_START=2025-01-01 OOS_END=2025-12-31 GPU=on
+mtf-pipeline:
+	./.venv/bin/python scripts/run_mtf_baseline_pipeline.py \
+		--mode full \
+		--instruments "$(if $(INSTRUMENTS),$(INSTRUMENTS),EUR_USD,GBP_USD,USD_JPY,XAU_USD)" \
+		--base-tf "$(if $(BASE_TF),$(BASE_TF),M15)" \
+		--htf-1 "$(if $(HTF1),$(HTF1),H1)" \
+		--htf-2 "$(if $(HTF2),$(HTF2),H4)" \
+		--prepare-extra-tfs "$(if $(PREP_EXTRA_TFS),$(PREP_EXTRA_TFS),D1)" \
+		--eval-tfs "$(if $(EVAL_TFS),$(EVAL_TFS),H1,M15)" \
+		--fine-start "$(if $(FINE_START),$(FINE_START),2022-01-01)" \
+		--fine-end "$(if $(FINE_END),$(FINE_END),2024-12-31)" \
+		--full-start "$(if $(FULL_START),$(FULL_START),2015-01-01)" \
+		--full-end "$(if $(FULL_END),$(FULL_END),2024-12-31)" \
+		--oos-start "$(if $(OOS_START),$(OOS_START),2025-01-01)" \
+		--oos-end "$(if $(OOS_END),$(OOS_END),2025-12-31)" \
+		--gpu "$(if $(GPU),$(GPU),auto)" \
+		--chunk-months "$(if $(CHUNK_MONTHS),$(CHUNK_MONTHS),3)" \
+		--risk-per-trade-pct "$(if $(RISK_PER_TRADE_PCT),$(RISK_PER_TRADE_PCT),0.01)" \
+		--max-notional-exposure-pct "$(if $(MAX_NOTIONAL_EXPOSURE_PCT),$(MAX_NOTIONAL_EXPOSURE_PCT),1.0)" \
+		--min-quantity "$(if $(MIN_QUANTITY),$(MIN_QUANTITY),1)" \
+		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
+		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
+		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",)
+
+# Example:
+# make mtf-clean OLDER_THAN_DAYS=7 DELETE_AFTER_ARCHIVE=1
+mtf-clean:
+	./.venv/bin/python scripts/cleanup_research_artifacts.py \
+		--output-dir "$(if $(OUTPUT_DIR),$(OUTPUT_DIR),data/research)" \
+		--archive-dir "$(if $(ARCHIVE_DIR),$(ARCHIVE_DIR),data/research/archive)" \
+		--older-than-days "$(if $(OLDER_THAN_DAYS),$(OLDER_THAN_DAYS),7)" \
+		$(if $(DELETE_AFTER_ARCHIVE),--delete-after-archive,) \
+		$(if $(DRY_RUN),--dry-run,)
 
 # Example:
 # make xau-breakout-backtest START=2025-01-01 END=2025-12-31
