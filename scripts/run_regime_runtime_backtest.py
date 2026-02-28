@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
+import json
 from pathlib import Path
 import sys
-from typing import Dict
+from typing import Dict, Optional
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -42,6 +44,17 @@ def parse_args():
     p.add_argument("--fill-mode", default="next_open", choices=["touch", "next_open"])
     p.add_argument("--initial-capital", type=float, default=10000.0)
     p.add_argument("--decision-mode", default="ensemble", choices=["ensemble", "router"])
+    p.add_argument("--risk-per-trade-pct", type=float, default=0.01)
+    p.add_argument("--max-notional-exposure-pct", type=float, default=1.0)
+    p.add_argument("--min-quantity", type=int, default=1)
+    p.add_argument("--max-quantity", type=int, default=100000)
+    p.add_argument("--max-drawdown-stop-pct", type=float, default=0.20)
+    p.add_argument("--daily-loss-limit-pct", type=float, default=0.05)
+    p.add_argument(
+        "--strategy-params-csv",
+        default="",
+        help="Optional universe shortlist CSV to override runtime strategy params for the selected instrument.",
+    )
     return p.parse_args()
 
 
@@ -131,6 +144,217 @@ def _regime_style_weights(regime_to_strategy: Dict[str, str]) -> Dict[str, Dict[
     return out
 
 
+def _allowed_override_keys() -> Dict[str, set]:
+    return {
+        "Breakout": {"lookback", "stop_loss_pct", "take_profit_pct", "min_breakout_pct", "quantity"},
+        "MeanReversion": {"sma_period", "deviation_pct", "stop_loss_pct", "take_profit_pct", "quantity"},
+        "EMATrendPullback": {"fast_period", "slow_period", "pullback_pct", "stop_loss_pct", "take_profit_pct", "quantity"},
+        "ATRBreakout": {"lookback", "atr_period", "atr_mult", "stop_loss_pct", "take_profit_pct", "quantity"},
+        "RSIBollingerReversion": {
+            "window",
+            "std_mult",
+            "rsi_period",
+            "rsi_oversold",
+            "rsi_overbought",
+            "stop_loss_pct",
+            "take_profit_pct",
+            "quantity",
+        },
+        "VolatilityCompressionBreakout": {
+            "range_lookback",
+            "atr_period",
+            "compression_window",
+            "compression_ratio",
+            "stop_loss_pct",
+            "take_profit_pct",
+            "quantity",
+        },
+    }
+
+
+def _load_param_overrides_from_csv(csv_path: str, instrument: str) -> Dict[str, Dict]:
+    if not csv_path:
+        return {}
+    path = Path(csv_path)
+    if not path.exists():
+        raise FileNotFoundError(f"strategy params CSV not found: {csv_path}")
+
+    best_rows: Dict[str, Dict] = {}
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("instrument") != instrument:
+                continue
+            strategy = str(row.get("strategy_name", "")).strip()
+            if not strategy:
+                continue
+            try:
+                stability = float(row.get("stability_score", "nan"))
+            except ValueError:
+                stability = float("nan")
+            existing = best_rows.get(strategy)
+            if existing is None or stability > existing["stability_score"]:
+                best_rows[strategy] = {"stability_score": stability, "row": row}
+
+    out: Dict[str, Dict] = {}
+    for strategy, payload in best_rows.items():
+        raw_params = payload["row"].get("params", "{}")
+        try:
+            params = json.loads(raw_params)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(params, dict):
+            out[strategy] = params
+    return out
+
+
+def _apply_overrides(config: Dict, strategy_name: str, overrides: Dict[str, Dict]) -> Dict:
+    params = overrides.get(strategy_name)
+    if not params:
+        return {}
+    allowed = _allowed_override_keys().get(strategy_name, set())
+    applied = {}
+    for k, v in params.items():
+        if k in allowed:
+            config[k] = v
+            applied[k] = v
+    return applied
+
+
+def _default_reference_price(instrument: str) -> float:
+    defaults = {
+        "EUR_USD": 1.10,
+        "GBP_USD": 1.28,
+        "USD_JPY": 150.0,
+        "XAU_USD": 2000.0,
+    }
+    return float(defaults.get(instrument, 1.0))
+
+
+def _usd_notional_per_unit(instrument: str, ref_price: float) -> float:
+    if instrument.startswith("USD_"):
+        return 1.0
+    if instrument.endswith("_USD"):
+        return max(ref_price, 1e-9)
+    return 1.0
+
+
+def _risk_size_quantity(
+    *,
+    instrument: str,
+    initial_capital: float,
+    risk_per_trade_pct: float,
+    max_notional_exposure_pct: float,
+    stop_loss_pct: float,
+    min_quantity: int,
+    max_quantity: int,
+    reference_price: float,
+) -> int:
+    risk_budget = max(initial_capital, 0.0) * max(risk_per_trade_pct, 0.0)
+    stop_loss_pct = max(float(stop_loss_pct), 1e-9)
+    reference_price = max(float(reference_price), 1e-9)
+
+    risk_per_unit = reference_price * stop_loss_pct
+    qty_from_risk = int(risk_budget / risk_per_unit) if risk_per_unit > 0 else 0
+
+    usd_per_unit = _usd_notional_per_unit(instrument, reference_price)
+    max_notional_usd = max(initial_capital, 0.0) * max(max_notional_exposure_pct, 0.0)
+    qty_from_notional = int(max_notional_usd / max(usd_per_unit, 1e-9)) if max_notional_usd > 0 else 0
+
+    qty = min(qty_from_risk, qty_from_notional)
+    if max_quantity > 0:
+        qty = min(qty, max_quantity)
+    if qty < max(min_quantity, 1):
+        return 0
+    return int(qty)
+
+
+def _strategy_stop_loss_pct(strategy_name: str, config: Dict) -> float:
+    if "stop_loss_pct" in config:
+        try:
+            return float(config["stop_loss_pct"])
+        except (TypeError, ValueError):
+            return 0.004
+    # Conservative fallback for unknown strategy configs.
+    if strategy_name == "ATRBreakout":
+        return 0.0045
+    return 0.004
+
+
+def _apply_runtime_risk_sizing(
+    *,
+    instrument: str,
+    initial_capital: float,
+    risk_per_trade_pct: float,
+    max_notional_exposure_pct: float,
+    min_quantity: int,
+    max_quantity: int,
+    strategy_cfgs: Dict[str, Dict],
+) -> Dict[str, int]:
+    ref_price = _default_reference_price(instrument)
+    assigned: Dict[str, int] = {}
+    for strategy_name, cfg in strategy_cfgs.items():
+        stop_loss_pct = _strategy_stop_loss_pct(strategy_name, cfg)
+        qty = _risk_size_quantity(
+            instrument=instrument,
+            initial_capital=initial_capital,
+            risk_per_trade_pct=risk_per_trade_pct,
+            max_notional_exposure_pct=max_notional_exposure_pct,
+            stop_loss_pct=stop_loss_pct,
+            min_quantity=min_quantity,
+            max_quantity=max_quantity,
+            reference_price=ref_price,
+        )
+        cfg["quantity"] = int(qty)
+        assigned[strategy_name] = int(qty)
+    return assigned
+
+
+class RuntimeGuardrailRiskManager:
+    def __init__(
+        self,
+        initial_capital: float,
+        max_drawdown_stop_pct: Optional[float],
+        daily_loss_limit_pct: Optional[float],
+    ) -> None:
+        self.initial_capital = float(initial_capital)
+        self.max_drawdown_stop_pct = (
+            float(max_drawdown_stop_pct) if max_drawdown_stop_pct is not None else None
+        )
+        self.daily_loss_limit_pct = (
+            float(daily_loss_limit_pct) if daily_loss_limit_pct is not None else None
+        )
+        self.peak_equity = float(initial_capital)
+        self.current_day = None
+        self.day_start_equity = float(initial_capital)
+        self.rejections = {"drawdown_stop": 0, "daily_loss_stop": 0}
+
+    def assess(self, signal, bar, portfolio, state):
+        system_state = state.get("system_state")
+        equity = float(getattr(system_state, "total_equity", self.initial_capital))
+        if equity > self.peak_equity:
+            self.peak_equity = equity
+
+        day = getattr(bar.timestamp, "date", lambda: None)()
+        if self.current_day != day:
+            self.current_day = day
+            self.day_start_equity = equity
+
+        if self.max_drawdown_stop_pct is not None and self.peak_equity > 0:
+            dd = (self.peak_equity - equity) / self.peak_equity
+            if dd >= self.max_drawdown_stop_pct:
+                self.rejections["drawdown_stop"] += 1
+                return None
+
+        if self.daily_loss_limit_pct is not None and self.day_start_equity > 0:
+            daily_loss = (self.day_start_equity - equity) / self.day_start_equity
+            if daily_loss >= self.daily_loss_limit_pct:
+                self.rejections["daily_loss_stop"] += 1
+                return None
+
+        return signal
+
+
 def main() -> int:
     args = parse_args()
     tf = Timeframe.from_oanda_granularity(args.tf)
@@ -142,6 +366,22 @@ def main() -> int:
     regime_predictor = KMeansRegimePredictor(model)
 
     library = _strategy_library(tf)
+    overrides = _load_param_overrides_from_csv(args.strategy_params_csv, args.instrument)
+    applied_overrides: Dict[str, Dict] = {}
+    for strategy_name, cfg in library.items():
+        applied = _apply_overrides(cfg, strategy_name, overrides)
+        if applied:
+            applied_overrides[strategy_name] = applied
+    assigned_quantities = _apply_runtime_risk_sizing(
+        instrument=args.instrument,
+        initial_capital=float(args.initial_capital),
+        risk_per_trade_pct=float(args.risk_per_trade_pct),
+        max_notional_exposure_pct=float(args.max_notional_exposure_pct),
+        min_quantity=int(args.min_quantity),
+        max_quantity=int(args.max_quantity),
+        strategy_cfgs=library,
+    )
+
     strategies = {}
     for strategy_name in set(model.regime_to_strategy.values()):
         if strategy_name in library:
@@ -247,6 +487,20 @@ def main() -> int:
             },
         },
     }
+    module_strategy_map = {
+        "trend_ema_pullback": "EMATrendPullback",
+        "trend_breakout": "Breakout",
+        "range_mean_reversion": "MeanReversion",
+        "range_rsi_reversion": "RSIBollingerReversion",
+        "vol_breakout": "ATRBreakout",
+        "vol_compression": "VolatilityCompressionBreakout",
+    }
+    for module_name, strategy_name in module_strategy_map.items():
+        if module_name in ensemble_cfg["modules"]:
+            _apply_overrides(ensemble_cfg["modules"][module_name], strategy_name, overrides)
+            if strategy_name in assigned_quantities:
+                ensemble_cfg["modules"][module_name]["quantity"] = int(assigned_quantities[strategy_name])
+
     selected_strategy_cfg = ensemble_cfg if args.decision_mode == "ensemble" else router_cfg
 
     ctx = {
@@ -269,13 +523,22 @@ def main() -> int:
                 "XAU_USD": 20.0,
             },
             "core_commission_per_10k_units": 1.0,
+            "min_quantity": int(args.min_quantity),
+            "max_quantity": int(args.max_quantity),
         },
     }
+
+    risk_manager = RuntimeGuardrailRiskManager(
+        initial_capital=float(args.initial_capital),
+        max_drawdown_stop_pct=float(args.max_drawdown_stop_pct),
+        daily_loss_limit_pct=float(args.daily_loss_limit_pct),
+    )
 
     result = Backtester(
         context=ctx,
         feature_engineer=feature_engineer,
         regime_predictor=regime_predictor,
+        risk_manager=risk_manager,
     ).run()
 
     print(f"Trades: {result.total_trades}")
@@ -288,6 +551,17 @@ def main() -> int:
     print(f"Regime counts: {regime_predictor.regime_counts}")
     print(f"Regime->strategy: {model.regime_to_strategy}")
     print(f"Decision mode: {args.decision_mode}")
+    print(f"Strategy params CSV: {args.strategy_params_csv or 'none'}")
+    print(f"Applied param overrides: {applied_overrides if applied_overrides else 'none'}")
+    print(
+        "Risk controls: "
+        f"risk_per_trade_pct={args.risk_per_trade_pct}, "
+        f"max_notional_exposure_pct={args.max_notional_exposure_pct}, "
+        f"min_quantity={args.min_quantity}, max_quantity={args.max_quantity}, "
+        f"max_drawdown_stop_pct={args.max_drawdown_stop_pct}, daily_loss_limit_pct={args.daily_loss_limit_pct}"
+    )
+    print(f"Assigned quantities: {assigned_quantities}")
+    print(f"Risk manager rejections: {risk_manager.rejections}")
     return 0
 
 

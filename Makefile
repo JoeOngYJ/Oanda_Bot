@@ -293,7 +293,14 @@ regime-runtime-backtest:
 		--start "$(if $(START),$(START),2025-01-01)" \
 		--end "$(if $(END),$(END),2025-12-31)" \
 		--fill-mode "$(if $(FILL_MODE),$(FILL_MODE),next_open)" \
-		--decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)"
+		--decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" \
+		--risk-per-trade-pct "$(if $(RISK_PER_TRADE_PCT),$(RISK_PER_TRADE_PCT),0.01)" \
+		--max-notional-exposure-pct "$(if $(MAX_NOTIONAL_EXPOSURE_PCT),$(MAX_NOTIONAL_EXPOSURE_PCT),1.0)" \
+		--min-quantity "$(if $(MIN_QUANTITY),$(MIN_QUANTITY),1)" \
+		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
+		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
+		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",)
 
 # Example:
 # make train-mtf-regime INSTRUMENTS=XAU_USD,EUR_USD,GBP_USD START=2022-01-01 END=2024-12-31 GPU=auto
