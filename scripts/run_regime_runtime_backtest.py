@@ -24,6 +24,7 @@ from backtesting.core.regime_runtime import (
     RegimeModel,
 )
 from backtesting.core.timeframe import Timeframe
+from backtesting.data.manager import DataManager
 from backtesting.strategy.examples.atr_breakout import ATRBreakout
 from backtesting.strategy.examples.breakout import Breakout
 from backtesting.strategy.examples.ema_pullback import EMATrendPullback
@@ -231,6 +232,34 @@ def _default_reference_price(instrument: str) -> float:
     return float(defaults.get(instrument, 1.0))
 
 
+def _reference_price_from_data(
+    instrument: str,
+    tf: Timeframe,
+    start: dt.datetime,
+    end: dt.datetime,
+) -> tuple[float, str]:
+    try:
+        dm = DataManager({})
+        data = dm.ensure_data(
+            instrument=instrument,
+            base_timeframe=tf,
+            start_date=start,
+            end_date=end,
+            timeframes=[tf],
+            force_download=False,
+        )
+        df = data.get(tf)
+        if df is not None and not df.empty and "close" in df.columns:
+            series = df["close"].dropna()
+            if not series.empty:
+                median_close = float(series.median())
+                if median_close > 0:
+                    return median_close, "data_median_close"
+    except Exception:
+        pass
+    return _default_reference_price(instrument), "static_fallback"
+
+
 def _usd_notional_per_unit(instrument: str, ref_price: float) -> float:
     if instrument.startswith("USD_"):
         return 1.0
@@ -284,14 +313,22 @@ def _strategy_stop_loss_pct(strategy_name: str, config: Dict) -> float:
 def _apply_runtime_risk_sizing(
     *,
     instrument: str,
+    tf: Timeframe,
+    start: dt.datetime,
+    end: dt.datetime,
     initial_capital: float,
     risk_per_trade_pct: float,
     max_notional_exposure_pct: float,
     min_quantity: int,
     max_quantity: int,
     strategy_cfgs: Dict[str, Dict],
-) -> Dict[str, int]:
-    ref_price = _default_reference_price(instrument)
+) -> tuple[Dict[str, int], float, str]:
+    ref_price, ref_source = _reference_price_from_data(
+        instrument=instrument,
+        tf=tf,
+        start=start,
+        end=end,
+    )
     assigned: Dict[str, int] = {}
     for strategy_name, cfg in strategy_cfgs.items():
         stop_loss_pct = _strategy_stop_loss_pct(strategy_name, cfg)
@@ -307,7 +344,7 @@ def _apply_runtime_risk_sizing(
         )
         cfg["quantity"] = int(qty)
         assigned[strategy_name] = int(qty)
-    return assigned
+    return assigned, ref_price, ref_source
 
 
 class RuntimeGuardrailRiskManager:
@@ -366,14 +403,19 @@ def main() -> int:
     regime_predictor = KMeansRegimePredictor(model)
 
     library = _strategy_library(tf)
+    start_dt = dt.datetime.fromisoformat(args.start)
+    end_dt = dt.datetime.fromisoformat(args.end)
     overrides = _load_param_overrides_from_csv(args.strategy_params_csv, args.instrument)
     applied_overrides: Dict[str, Dict] = {}
     for strategy_name, cfg in library.items():
         applied = _apply_overrides(cfg, strategy_name, overrides)
         if applied:
             applied_overrides[strategy_name] = applied
-    assigned_quantities = _apply_runtime_risk_sizing(
+    assigned_quantities, reference_price_used, reference_price_source = _apply_runtime_risk_sizing(
         instrument=args.instrument,
+        tf=tf,
+        start=start_dt,
+        end=end_dt,
         initial_capital=float(args.initial_capital),
         risk_per_trade_pct=float(args.risk_per_trade_pct),
         max_notional_exposure_pct=float(args.max_notional_exposure_pct),
@@ -507,8 +549,8 @@ def main() -> int:
         "data": {
             "instrument": args.instrument,
             "base_timeframe": tf,
-            "start_date": dt.datetime.fromisoformat(args.start),
-            "end_date": dt.datetime.fromisoformat(args.end),
+            "start_date": start_dt,
+            "end_date": end_dt,
         },
         "strategy": selected_strategy_cfg,
         "execution": {
@@ -561,6 +603,7 @@ def main() -> int:
         f"max_drawdown_stop_pct={args.max_drawdown_stop_pct}, daily_loss_limit_pct={args.daily_loss_limit_pct}"
     )
     print(f"Assigned quantities: {assigned_quantities}")
+    print(f"Reference price used: {reference_price_used:.6f} ({reference_price_source})")
     print(f"Risk manager rejections: {risk_manager.rejections}")
     return 0
 

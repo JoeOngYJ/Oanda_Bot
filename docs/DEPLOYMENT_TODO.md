@@ -25,10 +25,11 @@
    3. `min_quantity` / `max_quantity`,
    4. instrument-normalized USD notional-per-unit approximation.
 2. Remaining refinement:
-   1. replace static reference-price approximation with live/dataset-derived reference prices,
-   2. align USD conversion for non-USD-quoted crosses.
+   1. align USD conversion for non-USD-quoted crosses.
 3. Completed effect check:
    1. strict holdout with tuned params + risk sizing now yields 4/8 PASS (`data/research/regime_runtime_sweep_20260228_142934_tuned_params_risksized.csv`).
+   2. data-driven reference pricing is now enabled in runtime sizing (`data_median_close`), validated via
+      `data/research/regime_runtime_sweep_20260228_144022_tuned_params_risksized_guardrails_dataprice.csv` (4/8 PASS).
 4. Replace fixed `quantity=10000` with risk-based sizing in runtime:
    1. per-trade risk pct,
    2. ATR or stop-distance sizing,

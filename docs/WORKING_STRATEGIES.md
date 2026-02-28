@@ -20,7 +20,7 @@ This document summarizes the latest cross-instrument, cross-timeframe regime-run
    2. `daily_loss_limit_pct=0.05`
 
 Raw sweep file:
-`data/research/regime_runtime_sweep_20260228_143406_tuned_params_risksized_guardrails.csv`
+`data/research/regime_runtime_sweep_20260228_144022_tuned_params_risksized_guardrails_dataprice.csv`
 
 ## Promotion Gate
 
@@ -35,25 +35,26 @@ A setup is marked `PASS` only if all conditions hold:
 
 | Instrument | TF | Trades | Net PnL | Sharpe | Max DD | Status |
 |---|---|---:|---:|---:|---:|---|
-| EUR_USD | H1 | 246 | -934.64 | -1.3256 | 12.76% | REJECT |
-| EUR_USD | M15 | 624 | -1395.88 | -1.5650 | 20.05% | REJECT |
-| GBP_USD | H1 | 250 | 34.18 | 0.0476 | 8.77% | PASS |
-| GBP_USD | M15 | 441 | -1467.29 | -1.9180 | 20.43% | REJECT |
-| USD_JPY | H1 | 299 | 4372.85 | 2.3212 | 9.89% | PASS |
-| USD_JPY | M15 | 120 | -1885.67 | -2.3397 | 21.29% | REJECT |
-| XAU_USD | H1 | 336 | 1184.75 | 0.8161 | 8.07% | PASS |
-| XAU_USD | M15 | 1037 | 3684.40 | 1.4377 | 18.18% | PASS |
+| EUR_USD | H1 | 246 | -891.35 | -1.3256 | 12.19% | REJECT |
+| EUR_USD | M15 | 659 | -1399.42 | -1.6278 | 19.99% | REJECT |
+| GBP_USD | H1 | 250 | 32.82 | 0.0476 | 8.43% | PASS |
+| GBP_USD | M15 | 574 | -1526.09 | -1.8488 | 20.81% | REJECT |
+| USD_JPY | H1 | 299 | 4424.59 | 2.3229 | 9.97% | PASS |
+| USD_JPY | M15 | 102 | -2174.95 | -2.6414 | 24.12% | REJECT |
+| XAU_USD | H1 | 336 | 473.90 | 0.8161 | 3.40% | PASS |
+| XAU_USD | M15 | 1037 | 1473.76 | 1.4377 | 9.56% | PASS |
 
 ## Interpretation
 
-1. Risk-normalized sizing materially reduced catastrophic drawdowns on `USD_JPY` and `XAU_USD`.
+1. Data-driven reference pricing kept `PASS` count at `4/8` while tightening risk realism versus static pricing.
 2. Passing setups under unchanged gate are now:
    1. `GBP_USD H1`
    2. `USD_JPY H1`
    3. `XAU_USD M15`
    4. `XAU_USD H1`
 3. `M15` on `EUR_USD`, `GBP_USD`, and `USD_JPY` remains unstable under this gate, even after guardrails.
-4. Risk sizing is helping survivability; strategy edge quality still varies by instrument/timeframe.
+4. `XAU_USD` drawdowns improved further under data-priced sizing (`H1: 3.40%`, `M15: 9.56%`).
+5. Strategy edge quality still varies by instrument/timeframe.
 
 ## Current Working Strategy (Strict Gate)
 
@@ -64,6 +65,6 @@ A setup is marked `PASS` only if all conditions hold:
    4. `GBP_USD H1`
 2. Deployment status: `research/paper only`, not production-live yet.
 3. Next hardening priorities:
-   1. add portfolio-level kill switches (`daily_loss_limit`, rolling DD stop),
-   2. replace static reference prices in sizing with dataset/live-derived prices,
+   1. persist per-bar guardrail rejection diagnostics to artifacts,
+   2. align USD conversion for non-USD-quoted crosses in sizing,
    3. evaluate stricter drawdown threshold for `M15` variants (`<= 15%` stress gate).
