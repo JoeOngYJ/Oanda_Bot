@@ -100,12 +100,14 @@ Then run each printed command in its own terminal.
    2. Health: `GET /health`
    3. Safety state: `GET /execution/state`
 28. Multi-timeframe baseline framework: [docs/MTF_BASELINE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/MTF_BASELINE.md)
-29. MTF baseline pipeline targets:
+29. Multi-timeframe model architecture (XAU-first): [docs/MTF_MODEL_ARCHITECTURE.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/MTF_MODEL_ARCHITECTURE.md)
+30. MTF baseline pipeline targets:
    1. `make mtf-prepare-data`
    2. `make mtf-train`
    3. `make mtf-eval`
    4. `make mtf-pipeline`
-30. Intermediate artifact retention:
+   5. `make xau-mtf-dev`
+31. Intermediate artifact retention:
    1. `make mtf-clean OLDER_THAN_DAYS=7 DELETE_AFTER_ARCHIVE=1`
 
 ## Core Streams

@@ -17,6 +17,10 @@ from backtesting.strategy.signal import Signal
 class FeatureEngineer:
     """Feature hook for per-bar feature computation."""
 
+    def on_market_bar(self, bar: OHLCVBar, state: Dict[str, Any]) -> None:
+        """Optional hook to ingest every market bar before base-tf compute."""
+        return None
+
     def compute(self, bar: OHLCVBar, state: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
@@ -84,6 +88,7 @@ class Backtester:
             events = engine._build_market_events(market_data_dict)
             for timestamp, instrument, tf, row in events:
                 bar = engine._row_to_bar(timestamp, tf, row, instrument)
+                self.feature_engineer.on_market_bar(bar, state)
                 strategy.on_market_bar(bar)
                 if instrument == primary_instrument and tf == base_tf:
                     self._step(bar, strategy, simulator, state)
@@ -102,6 +107,7 @@ class Backtester:
                     if timestamp not in tf_indices[tf]:
                         continue
                     bar = engine._row_to_bar(timestamp, tf, df.loc[timestamp], config["data"]["instrument"])
+                    self.feature_engineer.on_market_bar(bar, state)
                     strategy.on_market_bar(bar)
 
                 base_bar = engine._row_to_bar(

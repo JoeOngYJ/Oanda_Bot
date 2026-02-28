@@ -30,6 +30,7 @@ def parse_args():
     p.add_argument("--base-tf", default="M15")
     p.add_argument("--htf-1", default="H1")
     p.add_argument("--htf-2", default="H4")
+    p.add_argument("--htf-3", default="D1")
     p.add_argument("--regimes", type=int, default=4)
     p.add_argument("--kmeans-iter", type=int, default=40)
     p.add_argument("--seed", type=int, default=42)
@@ -107,9 +108,11 @@ def _ema(a: np.ndarray, n: int) -> np.ndarray:
 
 
 def _feature_frame(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
+    o = df["open"].to_numpy(dtype=np.float64)
     c = df["close"].to_numpy(dtype=np.float64)
     h = df["high"].to_numpy(dtype=np.float64)
     l = df["low"].to_numpy(dtype=np.float64)
+    v = df["volume"].to_numpy(dtype=np.float64)
     prev_c = np.roll(c, 1)
     prev_c[0] = c[0]
     tr = np.maximum.reduce([h - l, np.abs(h - prev_c), np.abs(l - prev_c)])
@@ -122,27 +125,69 @@ def _feature_frame(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
     sma20 = _rolling_mean(c, 20)
     std20 = _rolling_std(c, 20)
     bbw = np.where(sma20 == 0, np.nan, (2.0 * 2.0 * std20) / sma20)
+    body_pct = np.where(o == 0, np.nan, (c - o) / o)
+    hl_range_pct = np.where(c == 0, np.nan, (h - l) / c)
+    vol_ma20 = _rolling_mean(v, 20)
+    vol_std20 = _rolling_std(v, 20)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        vol_z = (v - vol_ma20) / vol_std20
+    vol_z = np.nan_to_num(vol_z, nan=0.0, posinf=0.0, neginf=0.0)
+
+    out_cols = {
+        f"{prefix}_ret1": r1,
+        f"{prefix}_ret4": r4,
+        f"{prefix}_atr_pct": np.where(c == 0, np.nan, atr / c),
+        f"{prefix}_trend": trend,
+        f"{prefix}_bbw": bbw,
+        f"{prefix}_body_pct": body_pct,
+        f"{prefix}_range_pct": hl_range_pct,
+        f"{prefix}_vol_z": vol_z,
+    }
+    if prefix == "m15":
+        # Session behavior features (UTC) for session-aware regime conditioning.
+        idx = pd.DatetimeIndex(df.index)
+        hour = idx.hour.to_numpy(dtype=np.float64)
+        wday = idx.dayofweek.to_numpy(dtype=np.float64)
+        asia = ((hour >= 0) & (hour < 7)).astype(np.float64)
+        europe = ((hour >= 7) & (hour < 13)).astype(np.float64)
+        us = ((hour >= 13) & (hour < 22)).astype(np.float64)
+        eu_us_overlap = ((hour >= 13) & (hour < 17)).astype(np.float64)
+        out_cols.update(
+            {
+                f"{prefix}_sess_asia": asia,
+                f"{prefix}_sess_europe": europe,
+                f"{prefix}_sess_us": us,
+                f"{prefix}_sess_eu_us_overlap": eu_us_overlap,
+                f"{prefix}_hour_sin": np.sin((2.0 * np.pi * hour) / 24.0),
+                f"{prefix}_hour_cos": np.cos((2.0 * np.pi * hour) / 24.0),
+                f"{prefix}_wday_sin": np.sin((2.0 * np.pi * wday) / 7.0),
+                f"{prefix}_wday_cos": np.cos((2.0 * np.pi * wday) / 7.0),
+            }
+        )
+
     out = pd.DataFrame(
-        {
-            f"{prefix}_ret1": r1,
-            f"{prefix}_ret4": r4,
-            f"{prefix}_atr_pct": np.where(c == 0, np.nan, atr / c),
-            f"{prefix}_trend": trend,
-            f"{prefix}_bbw": bbw,
-        },
+        out_cols,
         index=df.index,
     )
     return out
 
 
-def _merge_multiframe_features(data_dict: Dict[Timeframe, pd.DataFrame], base_tf: Timeframe, h1_tf: Timeframe, h2_tf: Timeframe):
+def _merge_multiframe_features(
+    data_dict: Dict[Timeframe, pd.DataFrame],
+    base_tf: Timeframe,
+    h1_tf: Timeframe,
+    h2_tf: Timeframe,
+    h3_tf: Timeframe,
+):
     base = data_dict[base_tf].sort_index()
     h1 = data_dict[h1_tf].sort_index().reindex(base.index, method="ffill")
     h2 = data_dict[h2_tf].sort_index().reindex(base.index, method="ffill")
+    h3 = data_dict[h3_tf].sort_index().reindex(base.index, method="ffill")
     f_base = _feature_frame(base, "m15")
     f_h1 = _feature_frame(h1, "h1")
     f_h2 = _feature_frame(h2, "h4")
-    feat = pd.concat([f_base, f_h1, f_h2], axis=1).dropna()
+    f_h3 = _feature_frame(h3, "d1")
+    feat = pd.concat([f_base, f_h1, f_h2, f_h3], axis=1).dropna()
     return feat
 
 
@@ -151,11 +196,12 @@ def _heuristic_regime_strategy_mapping(centers: np.ndarray, feature_columns: Lis
     mapping = {}
     for r in range(centers.shape[0]):
         c = centers[r]
-        trend = c[idx.get("h1_trend", 0)] + c[idx.get("h4_trend", 0)]
+        trend = c[idx.get("h1_trend", 0)] + c[idx.get("h4_trend", 0)] + c[idx.get("d1_trend", 0)]
         vol = c[idx.get("m15_atr_pct", 0)] + c[idx.get("m15_bbw", 0)]
+        in_us = c[idx.get("m15_sess_us", 0)] + c[idx.get("m15_sess_eu_us_overlap", 0)]
         if trend > 0.5 and vol > 0:
             strat = "EMATrendPullback"
-        elif vol > 0.5:
+        elif vol > 0.5 and in_us > 0:
             strat = "Breakout"
         else:
             strat = "MeanReversion"
@@ -169,6 +215,7 @@ def main() -> int:
     base_tf = Timeframe.from_oanda_granularity(args.base_tf)
     h1_tf = Timeframe.from_oanda_granularity(args.htf_1)
     h2_tf = Timeframe.from_oanda_granularity(args.htf_2)
+    h3_tf = Timeframe.from_oanda_granularity(args.htf_3)
     start = dt.datetime.fromisoformat(args.start)
     end = dt.datetime.fromisoformat(args.end)
 
@@ -180,9 +227,9 @@ def main() -> int:
             base_timeframe=base_tf,
             start_date=start,
             end_date=end,
-            timeframes=[base_tf, h1_tf, h2_tf],
+            timeframes=[base_tf, h1_tf, h2_tf, h3_tf],
         )
-        feat = _merge_multiframe_features(data, base_tf, h1_tf, h2_tf)
+        feat = _merge_multiframe_features(data, base_tf, h1_tf, h2_tf, h3_tf)
         feat["instrument"] = inst
         frames.append(feat)
 

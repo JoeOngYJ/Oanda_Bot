@@ -435,7 +435,7 @@ def main() -> int:
     router_cfg = {
         "name": "RegimeSwitchRouter",
         "class": RegimeSwitchRouter,
-        "timeframes": [tf, Timeframe.H1, Timeframe.H4],
+        "timeframes": [tf, Timeframe.H1, Timeframe.H4, Timeframe.D1],
         "regime_to_strategy": model.regime_to_strategy,
         "default_strategy": default_strategy,
         "strategies": strategies,
@@ -443,7 +443,7 @@ def main() -> int:
     ensemble_cfg = {
         "name": "RegimeEnsemble",
         "class": RegimeEnsembleDecisionStrategy,
-        "timeframes": [tf, Timeframe.H1, Timeframe.H4],
+        "timeframes": [tf, Timeframe.H1, Timeframe.H4, Timeframe.D1],
         "decision_threshold": 0.25,
         "min_votes": 1,
         "regime_style_weights": _regime_style_weights(model.regime_to_strategy),

@@ -13,6 +13,7 @@
 .PHONY: regime-runtime-backtest
 .PHONY: train-mtf-regime
 .PHONY: mtf-prepare-data mtf-train mtf-eval mtf-pipeline mtf-clean
+.PHONY: xau-mtf-dev
 .PHONY: xau-breakout-backtest
 .PHONY: xau-breakout-opt
 .PHONY: exec-kill-on exec-kill-off exec-shadow-on exec-shadow-off
@@ -395,6 +396,33 @@ mtf-clean:
 		--older-than-days "$(if $(OLDER_THAN_DAYS),$(OLDER_THAN_DAYS),7)" \
 		$(if $(DELETE_AFTER_ARCHIVE),--delete-after-archive,) \
 		$(if $(DRY_RUN),--dry-run,)
+
+# Example:
+# make xau-mtf-dev FINE_START=2022-01-01 FINE_END=2024-12-31 FULL_START=2015-01-01 FULL_END=2024-12-31 OOS_START=2025-01-01 OOS_END=2025-12-31 GPU=on
+xau-mtf-dev:
+	./.venv/bin/python scripts/run_mtf_baseline_pipeline.py \
+		--mode full \
+		--instruments "XAU_USD" \
+		--base-tf "M15" \
+		--htf-1 "H1" \
+		--htf-2 "H4" \
+		--prepare-extra-tfs "D1" \
+		--eval-tfs "H1,M15" \
+		--fine-start "$(if $(FINE_START),$(FINE_START),2022-01-01)" \
+		--fine-end "$(if $(FINE_END),$(FINE_END),2024-12-31)" \
+		--full-start "$(if $(FULL_START),$(FULL_START),2015-01-01)" \
+		--full-end "$(if $(FULL_END),$(FULL_END),2024-12-31)" \
+		--oos-start "$(if $(OOS_START),$(OOS_START),2025-01-01)" \
+		--oos-end "$(if $(OOS_END),$(OOS_END),2025-12-31)" \
+		--gpu "$(if $(GPU),$(GPU),auto)" \
+		--chunk-months "$(if $(CHUNK_MONTHS),$(CHUNK_MONTHS),3)" \
+		--risk-per-trade-pct "$(if $(RISK_PER_TRADE_PCT),$(RISK_PER_TRADE_PCT),0.01)" \
+		--max-notional-exposure-pct "$(if $(MAX_NOTIONAL_EXPOSURE_PCT),$(MAX_NOTIONAL_EXPOSURE_PCT),1.0)" \
+		--min-quantity "$(if $(MIN_QUANTITY),$(MIN_QUANTITY),1)" \
+		--max-quantity "$(if $(MAX_QUANTITY),$(MAX_QUANTITY),100000)" \
+		--max-drawdown-stop-pct "$(if $(MAX_DRAWDOWN_STOP_PCT),$(MAX_DRAWDOWN_STOP_PCT),0.20)" \
+		--daily-loss-limit-pct "$(if $(DAILY_LOSS_LIMIT_PCT),$(DAILY_LOSS_LIMIT_PCT),0.05)" \
+		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",)
 
 # Example:
 # make xau-breakout-backtest START=2025-01-01 END=2025-12-31

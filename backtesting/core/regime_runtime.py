@@ -105,39 +105,72 @@ class MultiTimeframeRegimeFeatureEngineer(FeatureEngineer):
         self._close: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
         self._high: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
         self._low: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
+        self._open: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
+        self._vol: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
 
-    def compute(self, bar: OHLCVBar, state: Dict[str, Any]) -> Dict[str, Any]:
+    def on_market_bar(self, bar: OHLCVBar, state: Dict[str, Any]) -> None:
         tf_name = str(bar.timeframe.name).lower()
-        if tf_name not in {"m15", "h1", "h4"}:
-            return {}
+        if tf_name not in {"m15", "h1", "h4", "d1"}:
+            return
         self._close[tf_name].append(float(bar.close))
         self._high[tf_name].append(float(bar.high))
         self._low[tf_name].append(float(bar.low))
+        self._open[tf_name].append(float(bar.open))
+        self._vol[tf_name].append(float(bar.volume))
+
+    def compute(self, bar: OHLCVBar, state: Dict[str, Any]) -> Dict[str, Any]:
+        tf_name = str(bar.timeframe.name).lower()
+        if tf_name != "m15":
+            return {}
 
         out = {}
-        for key in ("m15", "h1", "h4"):
+        for key in ("m15", "h1", "h4", "d1"):
             c = np.asarray(self._close[key], dtype=np.float64)
             h = np.asarray(self._high[key], dtype=np.float64)
             l = np.asarray(self._low[key], dtype=np.float64)
-            if len(c) < 30:
+            o = np.asarray(self._open[key], dtype=np.float64)
+            v = np.asarray(self._vol[key], dtype=np.float64)
+            if len(c) < 5:
                 continue
             prev_c = np.roll(c, 1)
             prev_c[0] = c[0]
             tr = np.maximum.reduce([h - l, np.abs(h - prev_c), np.abs(l - prev_c)])
-            atr = np.mean(tr[-14:])
+            atr_lookback = min(14, len(tr))
+            atr = np.mean(tr[-atr_lookback:])
             ret1 = (c[-1] / c[-2]) - 1.0 if c[-2] else 0.0
             ret4 = (c[-1] / c[-5]) - 1.0 if len(c) >= 5 and c[-5] else 0.0
             ema20 = self._ema(c, 20)
             ema50 = self._ema(c, 50)
             trend = (ema20 - ema50) / c[-1] if c[-1] else 0.0
-            sma20 = np.mean(c[-20:])
-            std20 = np.std(c[-20:])
+            band_lookback = min(20, len(c))
+            sma20 = np.mean(c[-band_lookback:])
+            std20 = np.std(c[-band_lookback:])
             bbw = (2.0 * 2.0 * std20 / sma20) if sma20 else 0.0
+            body_pct = ((c[-1] - o[-1]) / o[-1]) if o[-1] else 0.0
+            range_pct = ((h[-1] - l[-1]) / c[-1]) if c[-1] else 0.0
+            vol_lookback = min(20, len(v))
+            vol_recent = v[-vol_lookback:]
+            vol_std = float(np.std(vol_recent))
+            vol_z = 0.0 if vol_std == 0.0 else float((v[-1] - np.mean(vol_recent)) / vol_std)
             out[f"{key}_ret1"] = float(ret1)
             out[f"{key}_ret4"] = float(ret4)
             out[f"{key}_atr_pct"] = float(atr / c[-1]) if c[-1] else 0.0
             out[f"{key}_trend"] = float(trend)
             out[f"{key}_bbw"] = float(bbw)
+            out[f"{key}_body_pct"] = float(body_pct)
+            out[f"{key}_range_pct"] = float(range_pct)
+            out[f"{key}_vol_z"] = float(vol_z)
+            if key == "m15":
+                hour = float(bar.timestamp.hour)
+                wday = float(bar.timestamp.weekday())
+                out[f"{key}_sess_asia"] = float(1.0 if 0 <= hour < 7 else 0.0)
+                out[f"{key}_sess_europe"] = float(1.0 if 7 <= hour < 13 else 0.0)
+                out[f"{key}_sess_us"] = float(1.0 if 13 <= hour < 22 else 0.0)
+                out[f"{key}_sess_eu_us_overlap"] = float(1.0 if 13 <= hour < 17 else 0.0)
+                out[f"{key}_hour_sin"] = float(np.sin((2.0 * np.pi * hour) / 24.0))
+                out[f"{key}_hour_cos"] = float(np.cos((2.0 * np.pi * hour) / 24.0))
+                out[f"{key}_wday_sin"] = float(np.sin((2.0 * np.pi * wday) / 7.0))
+                out[f"{key}_wday_cos"] = float(np.cos((2.0 * np.pi * wday) / 7.0))
         return out
 
     @staticmethod
