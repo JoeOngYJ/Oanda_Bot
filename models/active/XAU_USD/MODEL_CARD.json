@@ -1,0 +1,29 @@
+{
+  "symbol": "XAU_USD",
+  "tier": "active",
+  "model_file": "active_xau_usd_m15_london_cont_train20260301_oos_py29_mexpn57_mdd8.pkl",
+  "meta_file": "active_xau_usd_m15_london_cont_train20260301_oos_py29_mexpn57_mdd8.meta.json",
+  "trained_source_artifact": "models/research/regime_strategy_xau_balanced_events_m15/XAU_USD/XAU_USD_london_open_continuation_rr3_20260301_114250.pkl",
+  "train_reference_date_utc": "20260301",
+  "strategy": "london_open_continuation",
+  "ltf_timeframe": "M15",
+  "regime_variant": "rr3",
+  "oos_gate": {
+    "years_tested": 7,
+    "years_profitable": 2,
+    "profit_year_ratio": 0.2857142857142857,
+    "median_expectancy_r": -0.0005674455821541,
+    "max_drawdown_worst_year": 0.0769296806200222,
+    "stable": true,
+    "applied_gate_json": "{\"min_tested_years\":5,\"min_profitable_years\":2,\"min_profit_year_ratio\":0.25,\"min_median_expectancy_r\":-0.0007,\"max_worst_year_dd\":0.1}"
+  },
+  "in_sample_metrics": {
+    "expectancy_r": 0.000514,
+    "profit_factor": 1.256546,
+    "win_rate": 0.625,
+    "max_dd": 0.032455,
+    "trades": 40,
+    "objective_score": 0.119183
+  },
+  "created_at_utc": "2026-03-01T11:42:50.693705+00:00"
+}

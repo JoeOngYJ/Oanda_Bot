@@ -1,0 +1,8 @@
+{
+  "symbol": "GBP_JPY",
+  "updated_at_utc": "2026-03-01T11:46:56.329444+00:00",
+  "active_pointer": "/home/joe/Desktop/Algo_trading/oanda-trading-system/models/active/GBP_JPY/CURRENT_MODEL.txt",
+  "challenger_pointer": "/home/joe/Desktop/Algo_trading/oanda-trading-system/models/challengers/GBP_JPY/CURRENT_CHALLENGER.txt",
+  "stable_rows": 3,
+  "oos_rows": 3
+}

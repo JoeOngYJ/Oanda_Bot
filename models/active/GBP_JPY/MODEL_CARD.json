@@ -1,0 +1,29 @@
+{
+  "symbol": "GBP_JPY",
+  "tier": "active",
+  "model_file": "active_gbp_jpy_m15_trend_pullback_train20260301_oos_py60_mexpp10_mdd1.pkl",
+  "meta_file": "active_gbp_jpy_m15_trend_pullback_train20260301_oos_py60_mexpp10_mdd1.meta.json",
+  "trained_source_artifact": "models/research/regime_strategy/GBP_JPY/GBP_JPY_htf_trend_pullback_continuation_v03_20260301_093757.pkl",
+  "train_reference_date_utc": "20260301",
+  "strategy": "htf_trend_pullback_continuation",
+  "ltf_timeframe": "M15",
+  "regime_variant": "v03",
+  "oos_gate": {
+    "years_tested": 5,
+    "years_profitable": 3,
+    "profit_year_ratio": 0.6,
+    "median_expectancy_r": 9.985295474339036e-05,
+    "max_drawdown_worst_year": 0.0071687374438486,
+    "stable": true,
+    "applied_gate_json": "{\"min_tested_years\":5,\"min_profitable_years\":3,\"min_profit_year_ratio\":0.55,\"min_median_expectancy_r\":0.0,\"max_worst_year_dd\":0.1}"
+  },
+  "in_sample_metrics": {
+    "expectancy_r": 0.000291,
+    "profit_factor": 1.481715,
+    "win_rate": 0.551282,
+    "max_dd": 0.011468,
+    "trades": 78,
+    "objective_score": 0.251937
+  },
+  "created_at_utc": "2026-03-01T09:37:57.218834+00:00"
+}

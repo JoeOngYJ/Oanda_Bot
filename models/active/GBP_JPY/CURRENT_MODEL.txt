@@ -1,0 +1,4 @@
+active_gbp_jpy_m15_trend_pullback_train20260301_oos_py60_mexpp10_mdd1.pkl
+source=models/research/regime_strategy/GBP_JPY/GBP_JPY_htf_trend_pullback_continuation_v03_20260301_093757.pkl
+tier=active
+promotion=oneclick-symbol-gate

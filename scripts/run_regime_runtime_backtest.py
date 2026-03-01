@@ -45,8 +45,15 @@ def parse_args():
     p.add_argument("--fill-mode", default="next_open", choices=["touch", "next_open"])
     p.add_argument("--initial-capital", type=float, default=10000.0)
     p.add_argument("--decision-mode", default="ensemble", choices=["ensemble", "router"])
+    p.add_argument("--gpu", choices=["auto", "on", "off"], default="auto")
     p.add_argument("--risk-per-trade-pct", type=float, default=0.01)
     p.add_argument("--max-notional-exposure-pct", type=float, default=1.0)
+    p.add_argument(
+        "--max-concurrent-exposure-pct",
+        type=float,
+        default=1.0,
+        help="Portfolio-level gross notional exposure cap as fraction of initial capital.",
+    )
     p.add_argument("--min-quantity", type=int, default=1)
     p.add_argument("--max-quantity", type=int, default=100000)
     p.add_argument("--max-drawdown-stop-pct", type=float, default=0.20)
@@ -61,6 +68,21 @@ def parse_args():
         help="Optional universe shortlist CSV to override runtime strategy params for the selected instrument.",
     )
     return p.parse_args()
+
+
+def _resolve_gpu_mode(gpu_mode: str) -> tuple[bool, str]:
+    if gpu_mode == "off":
+        return False, "cpu"
+    try:
+        import cupy as cp  # type: ignore
+
+        count = int(cp.cuda.runtime.getDeviceCount())
+        if count > 0:
+            return True, "gpu(cupy)"
+    except Exception:
+        if gpu_mode == "on":
+            raise SystemExit("GPU requested (--gpu on) but CuPy/CUDA is unavailable.")
+    return False, "cpu"
 
 
 def _strategy_library(tf: Timeframe) -> Dict[str, Dict]:
@@ -400,11 +422,12 @@ def main() -> int:
     args = parse_args()
     tf = Timeframe.from_oanda_granularity(args.tf)
     model = RegimeModel.load(args.model_json)
+    use_gpu, runtime_backend = _resolve_gpu_mode(args.gpu)
     if any(col.startswith(("m15_", "h1_", "h4_")) for col in model.feature_columns):
-        feature_engineer = MultiTimeframeRegimeFeatureEngineer()
+        feature_engineer = MultiTimeframeRegimeFeatureEngineer(use_gpu=use_gpu)
     else:
-        feature_engineer = RegimeFeatureEngineer()
-    regime_predictor = KMeansRegimePredictor(model)
+        feature_engineer = RegimeFeatureEngineer(use_gpu=use_gpu)
+    regime_predictor = KMeansRegimePredictor(model, use_gpu=use_gpu)
 
     library = _strategy_library(tf)
     start_dt = dt.datetime.fromisoformat(args.start)
@@ -571,6 +594,7 @@ def main() -> int:
             "core_commission_per_10k_units": 1.0,
             "min_quantity": int(args.min_quantity),
             "max_quantity": int(args.max_quantity),
+            "max_concurrent_exposure_pct": float(args.max_concurrent_exposure_pct),
             "financing_enabled": args.financing == "on",
             "default_financing_long_rate": float(args.default_financing_long_rate),
             "default_financing_short_rate": float(args.default_financing_short_rate),
@@ -622,6 +646,7 @@ def main() -> int:
         "Risk controls: "
         f"risk_per_trade_pct={args.risk_per_trade_pct}, "
         f"max_notional_exposure_pct={args.max_notional_exposure_pct}, "
+        f"max_concurrent_exposure_pct={args.max_concurrent_exposure_pct}, "
         f"min_quantity={args.min_quantity}, max_quantity={args.max_quantity}, "
         f"max_drawdown_stop_pct={args.max_drawdown_stop_pct}, daily_loss_limit_pct={args.daily_loss_limit_pct}"
     )
@@ -633,6 +658,7 @@ def main() -> int:
     print(f"Assigned quantities: {assigned_quantities}")
     print(f"Reference price used: {reference_price_used:.6f} ({reference_price_source})")
     print(f"Risk manager rejections: {risk_manager.rejections}")
+    print(f"Runtime compute backend: {runtime_backend}")
     return 0
 
 

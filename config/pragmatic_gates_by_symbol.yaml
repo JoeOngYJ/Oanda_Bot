@@ -1,0 +1,25 @@
+symbol_gates:
+  EUR_USD:
+    min_tested_years: 3
+    min_profitable_years: 2
+    min_profit_year_ratio: 0.45
+    min_median_expectancy_r: 0.0
+    max_worst_year_dd: 0.10
+  GBP_JPY:
+    min_tested_years: 5
+    min_profitable_years: 3
+    min_profit_year_ratio: 0.55
+    min_median_expectancy_r: 0.0
+    max_worst_year_dd: 0.10
+  USD_JPY:
+    min_tested_years: 3
+    min_profitable_years: 2
+    min_profit_year_ratio: 0.45
+    min_median_expectancy_r: 0.0
+    max_worst_year_dd: 0.18
+  XAU_USD:
+    min_tested_years: 5
+    min_profitable_years: 2
+    min_profit_year_ratio: 0.25
+    min_median_expectancy_r: -0.0007
+    max_worst_year_dd: 0.10
