@@ -57,6 +57,31 @@ def _load_symbol_gates(path: Optional[Path]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
+def _safe_int(v: Any, default: int = 0) -> int:
+    try:
+        if v is None:
+            return default
+        if isinstance(v, float) and not np.isfinite(v):
+            return default
+        if pd.isna(v):
+            return default
+        return int(v)
+    except Exception:
+        return default
+
+
+def _safe_float(v: Any, default: float = 0.0) -> float:
+    try:
+        if v is None:
+            return default
+        fv = float(v)
+        if not np.isfinite(fv):
+            return default
+        return fv
+    except Exception:
+        return default
+
+
 def _year_windows(index: pd.DatetimeIndex, train_years: int) -> List[Dict[str, Any]]:
     if len(index) == 0:
         return []
@@ -76,6 +101,150 @@ def _year_windows(index: pd.DatetimeIndex, train_years: int) -> List[Dict[str, A
             continue
         out.append({"year": int(y), "start": s, "end": e, "bars": n})
     return out
+
+
+def _year_market_state(df_ltf_year: pd.DataFrame) -> Dict[str, float]:
+    if df_ltf_year.empty:
+        return {
+            "xau_return": np.nan,
+            "ann_vol": np.nan,
+            "atr_pct": np.nan,
+            "directional_day_frac": np.nan,
+            "compression_day_frac": np.nan,
+        }
+    cols = [c for c in ["open", "high", "low", "close"] if c in df_ltf_year.columns]
+    if len(cols) < 4:
+        return {
+            "xau_return": np.nan,
+            "ann_vol": np.nan,
+            "atr_pct": np.nan,
+            "directional_day_frac": np.nan,
+            "compression_day_frac": np.nan,
+        }
+    x = df_ltf_year[["open", "high", "low", "close"]].copy()
+    x.index = pd.DatetimeIndex(df_ltf_year.index)
+    d = (
+        x.groupby(x.index.floor("D"))
+        .agg(open=("open", "first"), high=("high", "max"), low=("low", "min"), close=("close", "last"))
+        .dropna(how="any")
+    )
+    if d.empty:
+        return {
+            "xau_return": np.nan,
+            "ann_vol": np.nan,
+            "atr_pct": np.nan,
+            "directional_day_frac": np.nan,
+            "compression_day_frac": np.nan,
+        }
+    d["ret"] = d["close"].pct_change().fillna(0.0)
+    prev_close = d["close"].shift(1)
+    d["tr"] = np.maximum(d["high"] - d["low"], np.maximum((d["high"] - prev_close).abs(), (d["low"] - prev_close).abs()))
+    bar_range = (d["high"] - d["low"]).replace(0.0, np.nan)
+    d["trend_day"] = ((d["close"] - d["open"]).abs() / bar_range).clip(0.0, 1.0)
+    d["tr_pct"] = (d["tr"] / d["close"]).replace([np.inf, -np.inf], np.nan)
+    tr_pct = d["tr_pct"].ffill().bfill()
+    q30 = tr_pct.rolling(60, min_periods=20).quantile(0.30)
+    compression = (tr_pct < q30).astype(float)
+    xau_return = float(d["close"].iloc[-1] / d["close"].iloc[0] - 1.0) if len(d) > 1 else 0.0
+    ann_vol = float(d["ret"].std(ddof=0) * np.sqrt(252.0)) if len(d) > 2 else np.nan
+    atr_pct = float(tr_pct.mean()) if len(d) > 0 else np.nan
+    directional_day_frac = float((d["trend_day"] > 0.60).mean()) if len(d) > 0 else np.nan
+    compression_day_frac = float(compression.mean()) if len(d) > 0 else np.nan
+    return {
+        "xau_return": xau_return,
+        "ann_vol": ann_vol,
+        "atr_pct": atr_pct,
+        "directional_day_frac": directional_day_frac,
+        "compression_day_frac": compression_day_frac,
+    }
+
+
+def _regime_fit_summary(dfm: pd.DataFrame) -> Dict[str, Any]:
+    if dfm.empty:
+        return {
+            "regime_profitable_years": 0,
+            "regime_expectancy_inband": np.nan,
+            "regime_expectancy_outband": np.nan,
+            "regime_edge_delta": np.nan,
+            "regime_inband_ratio": np.nan,
+            "regime_fit_ready": False,
+        }
+    req_cols = ["ann_vol", "directional_day_frac", "compression_day_frac", "expectancy_r", "profit_factor", "net_expectancy_after_cost"]
+    if any(c not in dfm.columns for c in req_cols):
+        return {
+            "regime_profitable_years": 0,
+            "regime_expectancy_inband": np.nan,
+            "regime_expectancy_outband": np.nan,
+            "regime_edge_delta": np.nan,
+            "regime_inband_ratio": np.nan,
+            "regime_fit_ready": False,
+        }
+    valid = dfm.dropna(subset=["ann_vol", "directional_day_frac", "compression_day_frac"]).copy()
+    if valid.empty:
+        return {
+            "regime_profitable_years": 0,
+            "regime_expectancy_inband": np.nan,
+            "regime_expectancy_outband": np.nan,
+            "regime_edge_delta": np.nan,
+            "regime_inband_ratio": np.nan,
+            "regime_fit_ready": False,
+        }
+    profitable = (valid["expectancy_r"] > 0.0) & (valid["net_expectancy_after_cost"] > 0.0) & (valid["profit_factor"] > 1.0)
+    p = valid.loc[profitable].copy()
+    n = valid.loc[~profitable].copy()
+    if p.empty:
+        return {
+            "regime_profitable_years": 0,
+            "regime_expectancy_inband": np.nan,
+            "regime_expectancy_outband": float(valid["expectancy_r"].mean()),
+            "regime_edge_delta": np.nan,
+            "regime_inband_ratio": 0.0,
+            "regime_fit_ready": False,
+        }
+    def _band(s: pd.Series) -> tuple[float, float]:
+        if len(s) <= 1:
+            v = float(s.iloc[0])
+            return (v, v)
+        return (float(s.quantile(0.25)), float(s.quantile(0.75)))
+
+    vol_lo, vol_hi = _band(p["ann_vol"])
+    dir_lo, dir_hi = _band(p["directional_day_frac"])
+    cmp_lo, cmp_hi = _band(p["compression_day_frac"])
+    in_band = (
+        valid["ann_vol"].between(vol_lo, vol_hi, inclusive="both")
+        & valid["directional_day_frac"].between(dir_lo, dir_hi, inclusive="both")
+        & valid["compression_day_frac"].between(cmp_lo, cmp_hi, inclusive="both")
+    )
+    exp_in = float(valid.loc[in_band, "expectancy_r"].mean()) if bool(in_band.any()) else np.nan
+    exp_out = float(valid.loc[~in_band, "expectancy_r"].mean()) if bool((~in_band).any()) else np.nan
+    edge_delta = float(exp_in - exp_out) if np.isfinite(exp_in) and np.isfinite(exp_out) else np.nan
+    inband_ratio = float(in_band.mean()) if len(valid) else np.nan
+    vol_lift = float(p["ann_vol"].mean() - n["ann_vol"].mean()) if (not p.empty and not n.empty) else np.nan
+    dir_lift = float(p["directional_day_frac"].mean() - n["directional_day_frac"].mean()) if (not p.empty and not n.empty) else np.nan
+    cmp_lift = float(n["compression_day_frac"].mean() - p["compression_day_frac"].mean()) if (not p.empty and not n.empty) else np.nan
+    sep_score = (
+        float(np.nanmean([vol_lift, dir_lift, cmp_lift]))
+        if any(np.isfinite(v) for v in [vol_lift, dir_lift, cmp_lift])
+        else np.nan
+    )
+    return {
+        "regime_profitable_years": int(profitable.sum()),
+        "regime_expectancy_inband": exp_in,
+        "regime_expectancy_outband": exp_out,
+        "regime_edge_delta": edge_delta,
+        "regime_inband_ratio": inband_ratio,
+        "regime_vol_lift": vol_lift,
+        "regime_directional_lift": dir_lift,
+        "regime_compression_lift": cmp_lift,
+        "regime_separation_score": sep_score,
+        "regime_band_ann_vol_lo": vol_lo,
+        "regime_band_ann_vol_hi": vol_hi,
+        "regime_band_directional_lo": dir_lo,
+        "regime_band_directional_hi": dir_hi,
+        "regime_band_compression_lo": cmp_lo,
+        "regime_band_compression_hi": cmp_hi,
+        "regime_fit_ready": True,
+    }
 
 
 def _predict_proba(models: Any, X: pd.DataFrame) -> Optional[pd.Series]:
@@ -239,6 +408,7 @@ def _evaluate_model_oos_years(
             settings=cfg.get("exploration", {}),
             signals=sig_y,
         )
+        ms = _year_market_state(df_y)
         rows.append(
             {
                 "year": int(w["year"]),
@@ -253,6 +423,11 @@ def _evaluate_model_oos_years(
                 "max_dd": float(tm.get("max_dd", 0.0)),
                 "sharpe_trade": float(tm.get("sharpe_trade", 0.0)),
                 "window_pass_rate": float(tm.get("window_pass_rate", 0.0)),
+                "xau_return": float(ms.get("xau_return", np.nan)),
+                "ann_vol": float(ms.get("ann_vol", np.nan)),
+                "atr_pct": float(ms.get("atr_pct", np.nan)),
+                "directional_day_frac": float(ms.get("directional_day_frac", np.nan)),
+                "compression_day_frac": float(ms.get("compression_day_frac", np.nan)),
             }
         )
 
@@ -275,6 +450,7 @@ def _evaluate_model_oos_years(
         "max_drawdown_worst_year": float(dfm["max_dd"].max()),
         "stable": bool(stable),
     }
+    summary.update(_regime_fit_summary(dfm))
     return {"rows": rows, "summary": summary}
 
 
@@ -290,7 +466,14 @@ def main() -> int:
     p.add_argument("--min-profit-year-ratio", type=float, default=0.33)
     p.add_argument("--min-median-expectancy-r", type=float, default=0.0)
     p.add_argument("--max-worst-year-dd", type=float, default=0.20)
+    p.add_argument("--gate-mode", choices=["yearly", "regime_fit"], default="yearly")
+    p.add_argument("--min-regime-profitable-years", type=int, default=2)
+    p.add_argument("--min-regime-edge-delta", type=float, default=0.0001)
+    p.add_argument("--min-regime-expectancy-inband", type=float, default=0.0)
+    p.add_argument("--min-regime-separation-score", type=float, default=0.0)
+    p.add_argument("--min-regime-inband-ratio", type=float, default=0.20)
     p.add_argument("--symbol-gates", default="", help="Optional YAML/JSON with per-symbol thresholds.")
+    p.add_argument("--promote-stable-only", action="store_true", help="Only promote champions that passed the selected gate.")
     p.add_argument("--prune-active-to-stable", action="store_true")
     args = p.parse_args()
 
@@ -362,33 +545,81 @@ def main() -> int:
             min_ratio = float(sg.get("min_profit_year_ratio", args.min_profit_year_ratio))
             min_med_exp = float(sg.get("min_median_expectancy_r", args.min_median_expectancy_r))
             max_worst_dd = float(sg.get("max_worst_year_dd", args.max_worst_year_dd))
-            ok = (
-                (int(r.get("years_tested", 0) or 0) >= min_tested)
-                and (int(r.get("years_profitable", 0) or 0) >= min_profitable)
-                and (float(r.get("profit_year_ratio", 0.0) or 0.0) >= min_ratio)
-                and (float(r.get("median_expectancy_r", -1.0) or -1.0) >= min_med_exp)
-                and (float(r.get("max_drawdown_worst_year", 1.0) or 1.0) <= max_worst_dd)
-            )
+            if args.gate_mode == "regime_fit":
+                min_regime_profitable = int(sg.get("min_regime_profitable_years", args.min_regime_profitable_years))
+                min_regime_edge_delta = float(sg.get("min_regime_edge_delta", args.min_regime_edge_delta))
+                min_regime_exp_in = float(sg.get("min_regime_expectancy_inband", args.min_regime_expectancy_inband))
+                min_regime_sep = float(sg.get("min_regime_separation_score", args.min_regime_separation_score))
+                min_regime_inband_ratio = float(sg.get("min_regime_inband_ratio", args.min_regime_inband_ratio))
+                ok = (
+                    (_safe_int(r.get("years_tested", 0), 0) >= min_tested)
+                    and (_safe_float(r.get("max_drawdown_worst_year", 1.0), 1.0) <= max_worst_dd)
+                    and (_safe_int(r.get("regime_profitable_years", 0), 0) >= min_regime_profitable)
+                    and (_safe_float(r.get("regime_expectancy_inband", -1.0), -1.0) >= min_regime_exp_in)
+                    and (_safe_float(r.get("regime_edge_delta", -1.0), -1.0) >= min_regime_edge_delta)
+                    and (_safe_float(r.get("regime_separation_score", -1.0), -1.0) >= min_regime_sep)
+                    and (_safe_float(r.get("regime_inband_ratio", 0.0), 0.0) >= min_regime_inband_ratio)
+                )
+                gate_applied.append(
+                    {
+                        "mode": "regime_fit",
+                        "min_tested_years": min_tested,
+                        "max_worst_year_dd": max_worst_dd,
+                        "min_regime_profitable_years": min_regime_profitable,
+                        "min_regime_expectancy_inband": min_regime_exp_in,
+                        "min_regime_edge_delta": min_regime_edge_delta,
+                        "min_regime_separation_score": min_regime_sep,
+                        "min_regime_inband_ratio": min_regime_inband_ratio,
+                    }
+                )
+            else:
+                ok = (
+                    (_safe_int(r.get("years_tested", 0), 0) >= min_tested)
+                    and (_safe_int(r.get("years_profitable", 0), 0) >= min_profitable)
+                    and (_safe_float(r.get("profit_year_ratio", 0.0), 0.0) >= min_ratio)
+                    and (_safe_float(r.get("median_expectancy_r", -1.0), -1.0) >= min_med_exp)
+                    and (_safe_float(r.get("max_drawdown_worst_year", 1.0), 1.0) <= max_worst_dd)
+                )
+                gate_applied.append(
+                    {
+                        "mode": "yearly",
+                        "min_tested_years": min_tested,
+                        "min_profitable_years": min_profitable,
+                        "min_profit_year_ratio": min_ratio,
+                        "min_median_expectancy_r": min_med_exp,
+                        "max_worst_year_dd": max_worst_dd,
+                    }
+                )
             stable_flags.append(bool(ok))
-            gate_applied.append(
-                {
-                    "min_tested_years": min_tested,
-                    "min_profitable_years": min_profitable,
-                    "min_profit_year_ratio": min_ratio,
-                    "min_median_expectancy_r": min_med_exp,
-                    "max_worst_year_dd": max_worst_dd,
-                }
-            )
         stable_df["stable"] = pd.Series(stable_flags, index=stable_df.index)
         stable_df["applied_gate_json"] = [json.dumps(g, separators=(",", ":")) for g in gate_applied]
     stable_csv = oos_root / "selected_models_oos_stability.csv"
     stable_df.to_csv(stable_csv, index=False)
 
-    # Promote champions only.
+    # Promote champions only (or only stable champions if requested).
     active_root = PROJECT_ROOT / args.active_out
     promoted = 0
     champs = sel[sel["deployment_role"].fillna("") == "champion"].copy()
+    promote_champs = champs.copy()
+    if args.promote_stable_only and (not stable_df.empty):
+        stable_key = (
+            stable_df.loc[stable_df["stable"] == True, ["symbol", "strategy", "regime_variant", "ltf_timeframe"]]
+            .drop_duplicates()
+            .assign(_ok=True)
+        )
+        promote_champs = promote_champs.merge(
+            stable_key, on=["symbol", "strategy", "regime_variant", "ltf_timeframe"], how="inner"
+        )
     for _, row in champs.iterrows():
+        if args.promote_stable_only:
+            match = (
+                (promote_champs["symbol"] == row["symbol"])
+                & (promote_champs["strategy"] == row["strategy"])
+                & (promote_champs["regime_variant"] == row["regime_variant"])
+                & (promote_champs["ltf_timeframe"] == row["ltf_timeframe"])
+            )
+            if not bool(match.any()):
+                continue
         symbol = str(row["symbol"])
         dst_dir = active_root / symbol
         dst_dir.mkdir(parents=True, exist_ok=True)
@@ -436,6 +667,12 @@ def main() -> int:
                 "min_profit_year_ratio": float(args.min_profit_year_ratio),
                 "min_median_expectancy_r": float(args.min_median_expectancy_r),
                 "max_worst_year_dd": float(args.max_worst_year_dd),
+                "gate_mode": str(args.gate_mode),
+                "min_regime_profitable_years": int(args.min_regime_profitable_years),
+                "min_regime_edge_delta": float(args.min_regime_edge_delta),
+                "min_regime_expectancy_inband": float(args.min_regime_expectancy_inband),
+                "min_regime_separation_score": float(args.min_regime_separation_score),
+                "min_regime_inband_ratio": float(args.min_regime_inband_ratio),
                 "symbol_gates_file": str(args.symbol_gates or ""),
                 "symbol_gates_count": int(len(symbol_gates)),
                 "symbol_gates": symbol_gates,

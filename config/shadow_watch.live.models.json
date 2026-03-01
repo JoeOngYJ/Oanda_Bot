@@ -1,0 +1,10 @@
+{
+  "models": [
+    {"symbol": "XAU_USD", "model_path": "models/active/XAU_USD/XAU_USD_trend_breakout_continuation_xau_hyb_v03_20260301_203427.pkl"},
+    {"symbol": "XAU_USD", "model_path": "models/active/XAU_USD/XAU_USD_session_range_breakout_xau_as_v03_20260301_120015.pkl"},
+    {"symbol": "XAU_USD", "model_path": "models/active/XAU_USD/live_xau_usd_london_open_continuation_m15_rr3_20260301_115356.pkl"},
+    {"symbol": "EUR_USD", "model_path": "models/active/EUR_USD/EUR_USD_htf_trend_pullback_continuation_v03_20260301_093757.pkl"},
+    {"symbol": "GBP_JPY", "model_path": "models/active/GBP_JPY/live_gbp_jpy_htf_trend_pullback_continuation_m15_v03_20260301_115356.pkl"},
+    {"symbol": "USD_JPY", "model_path": "models/active/USD_JPY/live_usd_jpy_htf_trend_pullback_continuation_m15_eujpy_r3_20260301_115356.pkl"}
+  ]
+}
