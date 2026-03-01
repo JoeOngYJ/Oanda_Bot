@@ -1,4 +1,4 @@
-active_xau_usd_m15_london_cont_train20260301_oos_py29_mexpn57_mdd8.pkl
+live_xau_usd_london_open_continuation_m15_rr3_20260301_115356.pkl
 source=models/research/regime_strategy_xau_balanced_events_m15/XAU_USD/XAU_USD_london_open_continuation_rr3_20260301_114250.pkl
 tier=active
-promotion=oneclick-symbol-gate
+promotion=oneclick

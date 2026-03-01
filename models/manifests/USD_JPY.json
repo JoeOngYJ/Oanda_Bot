@@ -1,8 +1,8 @@
 {
   "symbol": "USD_JPY",
-  "updated_at_utc": "2026-03-01T11:46:56.331045+00:00",
-  "active_pointer": "",
+  "updated_at_utc": "2026-03-01T11:53:56.003458+00:00",
+  "active_pointer": "/home/joe/Desktop/Algo_trading/oanda-trading-system/models/active/USD_JPY/CURRENT_MODEL.txt",
   "challenger_pointer": "/home/joe/Desktop/Algo_trading/oanda-trading-system/models/challengers/USD_JPY/CURRENT_CHALLENGER.txt",
-  "stable_rows": 0,
-  "oos_rows": 3
+  "stable_rows": 2,
+  "oos_rows": 5
 }

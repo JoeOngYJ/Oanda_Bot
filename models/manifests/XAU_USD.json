@@ -1,6 +1,6 @@
 {
   "symbol": "XAU_USD",
-  "updated_at_utc": "2026-03-01T11:46:56.332741+00:00",
+  "updated_at_utc": "2026-03-01T11:53:56.005066+00:00",
   "active_pointer": "/home/joe/Desktop/Algo_trading/oanda-trading-system/models/active/XAU_USD/CURRENT_MODEL.txt",
   "challenger_pointer": "/home/joe/Desktop/Algo_trading/oanda-trading-system/models/challengers/XAU_USD/CURRENT_CHALLENGER.txt",
   "stable_rows": 1,
