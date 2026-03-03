@@ -113,6 +113,12 @@ Then run each printed command in its own terminal.
    1. `make mtf-clean OLDER_THAN_DAYS=7 DELETE_AFTER_ARCHIVE=1`
 32. Systemd + VPS runbook: [docs/SYSTEMD_VPS_RUNBOOK.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/SYSTEMD_VPS_RUNBOOK.md)
 33. Download fix note (archived): [docs/notes/DOWNLOAD_FIX_SUMMARY.md](/home/joe/Desktop/Algo_trading/oanda-trading-system/docs/notes/DOWNLOAD_FIX_SUMMARY.md)
+34. XAU multi-session deterministic pipeline:
+   1. Full run: `make xau-multi-session-train CONFIG=config/xau_multi_session_pipeline.default.json`
+   2. Smoke run: `make xau-multi-session-smoke CONFIG=config/xau_multi_session_pipeline.smoke.json REGIME_TRAIN_YEARS=3`
+35. XAU multi-session configs:
+   1. Default: [config/xau_multi_session_pipeline.default.json](/home/joe/Desktop/Algo_trading/oanda-trading-system/config/xau_multi_session_pipeline.default.json)
+   2. Smoke: [config/xau_multi_session_pipeline.smoke.json](/home/joe/Desktop/Algo_trading/oanda-trading-system/config/xau_multi_session_pipeline.smoke.json)
 
 ## Core Streams
 Configured in `config/system.yaml`:

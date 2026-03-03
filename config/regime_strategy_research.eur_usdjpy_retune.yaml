@@ -1,0 +1,164 @@
+symbols: [EUR_USD, USD_JPY]
+entry_timeframes: [M15, M5]
+htf_timeframes: {h1: H1, d1: D1}
+timezone: Europe/London
+
+training:
+  years: 10
+  symbol_batch_size: 1
+
+exploration:
+  max_variants: 6
+  top_k: 2
+  hybrid_min_per_symbol: 1
+  min_trades: 20
+  min_window_pass_rate: 0.35
+  regime_router_min_regime_trades: 12
+  regime_router_min_mapped_regimes: 2
+  objective:
+    expectancy_weight: 1.0
+    max_dd_penalty: 0.55
+    cost_penalty: 0.25
+    sharpe_weight: 0.06
+    window_pass_weight: 0.18
+  regime_variants:
+    - {id: eujpy_r1, trend_min: 0.55, range_min: 0.55, transition_min: 0.50, exhaustion_extension_atr: 2.0}
+    - {id: eujpy_r2, trend_min: 0.57, range_min: 0.56, transition_min: 0.52, exhaustion_extension_atr: 2.2}
+    - {id: eujpy_r3, trend_min: 0.59, range_min: 0.57, transition_min: 0.54, exhaustion_extension_atr: 2.4}
+
+regime:
+  drop_last_htf_bar: true
+  strict_no_lookahead: true
+  hysteresis_enabled: true
+  hysteresis_margin: 0.03
+  hysteresis_min_confidence: 0.54
+  min_regime_bars: 2
+  weights: {h1: 0.6, d1: 0.4}
+  thresholds:
+    slope_lookback: 5
+    swing_window: 20
+    swing_break_rate_window: 24
+    trend_min: 0.56
+    range_min: 0.55
+    transition_min: 0.51
+    exhaustion_min: 0.56
+    regime_margin: 0.03
+    transition_contraction_ratio: 0.85
+    transition_expansion_ratio: 1.10
+    exhaustion_extension_atr: 2.1
+    impulse_body_atr: 1.25
+
+sessions:
+  tokyo: [0, 9]
+  london: [8, 17]
+  newyork: [13, 22]
+  overlap: [13, 17]
+
+macro:
+  carry_proxy: 0.0
+  event_pre_minutes: 45
+  event_post_minutes: 90
+  events_utc: []
+  session_spread_bps: {tokyo: 2.0, london: 1.2, newyork: 1.4, overlap: 1.0, offhours: 2.4}
+  slippage_vol_window: 240
+  event_slippage_mult: 0.5
+
+pair_overrides:
+  EUR_USD:
+    entry_timeframes: [M5]
+    preferred_sessions: [london, overlap]
+    preferred_styles: [trend, breakout]
+    barrier:
+      horizon_bars: 14
+      up_atr_mult: 0.9
+      down_atr_mult: 0.9
+      three_class_labels: true
+      neutral_atr_mult: 0.30
+      dynamic_neutral_enabled: true
+      neutral_mult_high_vol: 0.45
+      neutral_mult_event: 0.55
+    signal_quality:
+      allowed_sessions: [london, overlap]
+      min_regime_confidence: 0.56
+      min_regime_score_margin: 0.03
+      max_atr_norm: 2.2
+      max_body_atr: 1.8
+    no_trade:
+      enabled: true
+      probability_threshold: 0.62
+      calibrate_threshold: true
+      threshold_grid: [0.58, 0.62, 0.66, 0.70]
+      min_trades: 20
+      max_dd_cap: 0.15
+    hard_filters:
+      expectancy_min: 0.0
+      net_expectancy_min: 0.0
+      window_pass_min: 0.35
+
+  USD_JPY:
+    entry_timeframes: [M15]
+    preferred_sessions: [tokyo, overlap]
+    preferred_styles: [breakout, trend]
+    barrier:
+      horizon_bars: 12
+      up_atr_mult: 0.85
+      down_atr_mult: 0.85
+      three_class_labels: true
+      neutral_atr_mult: 0.28
+      dynamic_neutral_enabled: true
+    signal_quality:
+      allowed_sessions: [tokyo, overlap]
+      min_regime_confidence: 0.57
+      min_regime_score_margin: 0.03
+      max_atr_norm: 2.1
+      max_body_atr: 1.7
+    no_trade:
+      enabled: true
+      probability_threshold: 0.64
+      calibrate_threshold: true
+      threshold_grid: [0.58, 0.62, 0.64, 0.68]
+      min_trades: 20
+      max_dd_cap: 0.18
+    hard_filters:
+      expectancy_min: 0.0
+      net_expectancy_min: 0.0
+      window_pass_min: 0.35
+
+no_trade:
+  enabled: true
+  probability_threshold: 0.60
+  calibrate_threshold: true
+  threshold_grid: [0.55, 0.60, 0.64, 0.68]
+  min_trades: 20
+  max_dd_cap: 0.20
+  ece_bins: 10
+
+entry_refinement:
+  enabled: true
+  apply_timeframes: [M5, M1]
+  min_regime_confidence: 0.56
+  min_regime_score_margin: 0.03
+  confirmation_bars: 2
+  min_body_atr: 0.08
+  max_atr_norm: 2.3
+
+risk_controls:
+  kill_switch_expectancy_max: 0.0
+  kill_switch_sharpe_max: 0.0
+  kill_switch_window_pass_max: 0.30
+
+model: {}
+splits:
+  folds: 8
+  train_ratio: 0.75
+barrier: {}
+cost: {horizon_bars: 10, spread_bps: 1.0, fee_bps: 0.5}
+
+deployment_policy:
+  champion_per_symbol: 1
+  challenger_per_symbol: 1
+
+output:
+  ranking_csv: data/research/regime_strategy_ranking.eur_usdjpy_retune.csv
+  model_dir: models/research/regime_strategy_eur_usdjpy_retune
+  manifest_json: data/research/regime_strategy_manifest.eur_usdjpy_retune.json

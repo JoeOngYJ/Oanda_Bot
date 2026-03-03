@@ -12,6 +12,9 @@
   - `scripts/run_mtf_baseline_pipeline.py`
 - GPU pre-screening for strategy candidates:
   - `scripts/run_gpu_prescreener.py`
+- Regime->strategy routing research (D1/H1 regimes, LTF entries):
+  - `scripts/regime_strategy_research.py`
+  - config snippet: `config/regime_strategy_research.snippet.yaml`
 
 ## Runtime Model Consumption
 

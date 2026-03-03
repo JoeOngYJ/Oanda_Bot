@@ -1,0 +1,18 @@
+[Unit]
+Description=OANDA Discord Execution Notifier Bot
+After=network-online.target oanda-trading-supervisor.service
+Wants=network-online.target oanda-trading-supervisor.service
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_ROOT__
+EnvironmentFile=__PROJECT_ROOT__/.env
+Environment=DISCORD_EXEC_CHANNEL_ID=1477609642258337954
+ExecStart=__PROJECT_ROOT__/.venv/bin/python -u scripts/discord_execution_notifier.py --balance-timeout-seconds 10
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

@@ -14,6 +14,7 @@
 .PHONY: train-mtf-regime
 .PHONY: mtf-prepare-data mtf-train mtf-eval mtf-pipeline mtf-clean
 .PHONY: xau-mtf-dev
+.PHONY: xau-multi-session-train xau-multi-session-smoke
 .PHONY: xau-breakout-backtest
 .PHONY: xau-breakout-opt
 .PHONY: exec-kill-on exec-kill-off exec-shadow-on exec-shadow-off
@@ -500,6 +501,18 @@ xau-mtf-dev:
 		$(if $(STRATEGY_PARAMS_CSV),--strategy-params-csv "$(STRATEGY_PARAMS_CSV)",)
 
 # Example:
+# make xau-multi-session-train CONFIG=config/xau_multi_session_pipeline.default.json
+xau-multi-session-train:
+	./.venv/bin/python scripts/xau_multi_session_pipeline.py \
+		--config "$(if $(CONFIG),$(CONFIG),config/xau_multi_session_pipeline.default.json)"
+
+# Example:
+# make xau-multi-session-smoke CONFIG=config/xau_multi_session_pipeline.smoke.json REGIME_TRAIN_YEARS=3
+xau-multi-session-smoke:
+	REGIME_DISABLE_DOWNLOAD=1 REGIME_TRAIN_YEARS="$(if $(REGIME_TRAIN_YEARS),$(REGIME_TRAIN_YEARS),3)" ./.venv/bin/python scripts/xau_multi_session_pipeline.py \
+		--config "$(if $(CONFIG),$(CONFIG),config/xau_multi_session_pipeline.smoke.json)"
+
+# Example:
 # make xau-breakout-backtest START=2025-01-01 END=2025-12-31
 xau-breakout-backtest:
 	./.venv/bin/python scripts/run_xau_breakout_backtest.py \
@@ -539,6 +552,12 @@ discord-operator-bot:
 		--commands-prefix "$(if $(COMMANDS_PREFIX),$(COMMANDS_PREFIX),!)"
 
 # Example:
+# DISCORD_EXEC_BOT_TOKEN=... DISCORD_EXEC_CHANNEL_ID=1477609642258337954 make discord-execution-notifier
+discord-execution-notifier:
+	./.venv/bin/python scripts/discord_execution_notifier.py \
+		--balance-timeout-seconds "$(if $(BALANCE_TIMEOUT_SECONDS),$(BALANCE_TIMEOUT_SECONDS),10)"
+
+# Example:
 # REGIME_MODEL_JSON=data/research/multiframe_regime_model_20260228_194306.json make trading-supervisor
 trading-supervisor:
 	./.venv/bin/python scripts/trading_supervisor.py \
@@ -559,9 +578,10 @@ systemd-user-install:
 systemd-user-enable:
 	systemctl --user enable --now oanda-trading-supervisor.service
 	systemctl --user enable --now oanda-discord-operator.service
+	systemctl --user enable --now oanda-discord-execution-notifier.service
 
 systemd-user-enable-infra:
 	systemctl --user enable --now oanda-infra.service
 
 systemd-user-status:
-	systemctl --user status oanda-infra.service oanda-trading-supervisor.service oanda-discord-operator.service
+	systemctl --user status oanda-infra.service oanda-trading-supervisor.service oanda-discord-operator.service oanda-discord-execution-notifier.service

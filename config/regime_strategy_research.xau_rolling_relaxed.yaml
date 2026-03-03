@@ -1,0 +1,71 @@
+symbols: [XAU_USD]
+entry_timeframes: [M15]
+htf_timeframes: {h1: H1, d1: D1}
+timezone: Europe/London
+training: {years: 10, symbol_batch_size: 1}
+exploration:
+  max_variants: 3
+  top_k: 1
+  min_trades: 10
+  objective:
+    expectancy_weight: 1.0
+    max_dd_penalty: 0.4
+    cost_penalty: 0.15
+    sharpe_weight: 0.05
+    window_pass_weight: 0.1
+  regime_variants:
+    - {id: rr1, trend_min: 0.54, range_min: 0.55, transition_min: 0.50, exhaustion_extension_atr: 2.0}
+    - {id: rr2, trend_min: 0.56, range_min: 0.57, transition_min: 0.52, exhaustion_extension_atr: 2.2}
+    - {id: rr3, trend_min: 0.58, range_min: 0.58, transition_min: 0.54, exhaustion_extension_atr: 2.4}
+regime:
+  drop_last_htf_bar: true
+  strict_no_lookahead: true
+  hysteresis_enabled: true
+  hysteresis_margin: 0.02
+  hysteresis_min_confidence: 0.52
+  min_regime_bars: 1
+  weights: {h1: 0.6, d1: 0.4}
+  thresholds:
+    slope_lookback: 5
+    swing_window: 20
+    swing_break_rate_window: 24
+    trend_min: 0.55
+    range_min: 0.55
+    transition_min: 0.50
+    exhaustion_min: 0.55
+    regime_margin: 0.03
+    transition_contraction_ratio: 0.85
+    transition_expansion_ratio: 1.1
+    exhaustion_extension_atr: 2.0
+    impulse_body_atr: 1.25
+sessions:
+  tokyo: [0,9]
+  london: [8,17]
+  newyork: [13,22]
+  overlap: [13,17]
+pair_overrides:
+  XAU_USD:
+    preferred_sessions: [london, overlap]
+    preferred_styles: [breakout, reversal, trend]
+    entry_timeframes: [M15]
+    signal_quality: null
+    barrier:
+      horizon_bars: 8
+      up_atr_mult: 0.8
+      down_atr_mult: 0.8
+      three_class_labels: true
+      neutral_atr_mult: 0.25
+no_trade:
+  enabled: true
+  probability_threshold: 0.55
+  calibrate_threshold: true
+  threshold_grid: [0.52,0.55,0.58,0.60]
+  min_trades: 10
+  max_dd_cap: 0.30
+  ece_bins: 10
+entry_refinement:
+  enabled: false
+model: {}
+splits: {folds: 6, train_ratio: 0.75}
+barrier: {}
+cost: {horizon_bars: 8, spread_bps: 1.0, fee_bps: 0.5}

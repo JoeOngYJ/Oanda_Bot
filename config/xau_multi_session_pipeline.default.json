@@ -1,0 +1,95 @@
+{
+  "symbol": "XAU_USD",
+  "ltf": "M15",
+  "h1": "H1",
+  "d1": "D1",
+  "seed": 42,
+  "n_splits": 6,
+  "test_size": 1500,
+  "embargo_bars": 96,
+  "threshold_grid": [
+    0.5,
+    0.55,
+    0.6,
+    0.65,
+    0.7
+  ],
+  "min_ev": 0.0,
+  "corr_suppress_threshold": 0.95,
+  "min_session_train_rows": 150,
+  "output_dir": "data/research/xau_multi_session_pipeline",
+  "temporal_context_mode": "hybrid",
+  "short_context_lookbacks": [8, 16, 32, 64],
+  "short_context_lag_bars": [1, 2, 3, 4, 8],
+  "session_context_lookbacks_bars": [96, 288, 480],
+  "slow_regime_days": [10, 20, 40],
+  "sequence_lookback_bars": 128,
+  "sequence_stride_bars": 8,
+  "session_cfg": {
+    "tz": "Europe/London",
+    "boundaries": {
+      "asia": {
+        "start_hm": "00:00",
+        "end_hm": "06:00"
+      },
+      "pre_london": {
+        "start_hm": "06:00",
+        "end_hm": "08:00"
+      },
+      "london_open": {
+        "start_hm": "08:00",
+        "end_hm": "09:00"
+      },
+      "london_continuation": {
+        "start_hm": "09:00",
+        "end_hm": "13:00"
+      },
+      "ny_open": {
+        "start_hm": "13:00",
+        "end_hm": "15:00"
+      },
+      "ny_overlap_post_data": {
+        "start_hm": "15:00",
+        "end_hm": "24:00"
+      }
+    }
+  },
+  "label_params": {
+    "asia": {
+      "up_mult": 1.8,
+      "dn_mult": 1.8,
+      "min_horizon_bars": 12,
+      "max_horizon_bars": 32
+    },
+    "pre_london": {
+      "up_mult": 1.7,
+      "dn_mult": 1.7,
+      "min_horizon_bars": 10,
+      "max_horizon_bars": 28
+    },
+    "london_open": {
+      "up_mult": 1.3,
+      "dn_mult": 1.3,
+      "min_horizon_bars": 6,
+      "max_horizon_bars": 20
+    },
+    "london_continuation": {
+      "up_mult": 1.4,
+      "dn_mult": 1.4,
+      "min_horizon_bars": 8,
+      "max_horizon_bars": 24
+    },
+    "ny_open": {
+      "up_mult": 1.5,
+      "dn_mult": 1.5,
+      "min_horizon_bars": 8,
+      "max_horizon_bars": 24
+    },
+    "ny_overlap_post_data": {
+      "up_mult": 1.6,
+      "dn_mult": 1.6,
+      "min_horizon_bars": 8,
+      "max_horizon_bars": 26
+    }
+  }
+}

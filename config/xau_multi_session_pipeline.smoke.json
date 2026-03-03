@@ -1,0 +1,26 @@
+{
+  "symbol": "XAU_USD",
+  "ltf": "M15",
+  "h1": "H1",
+  "d1": "D1",
+  "seed": 42,
+  "n_splits": 2,
+  "test_size": 400,
+  "embargo_bars": 48,
+  "threshold_grid": [
+    0.5,
+    0.55,
+    0.6
+  ],
+  "min_ev": 0.0,
+  "corr_suppress_threshold": 0.95,
+  "min_session_train_rows": 80,
+  "temporal_context_mode": "hybrid",
+  "short_context_lookbacks": [8, 16, 32],
+  "short_context_lag_bars": [1, 2, 4],
+  "session_context_lookbacks_bars": [96, 192],
+  "slow_regime_days": [5, 10],
+  "sequence_lookback_bars": 64,
+  "sequence_stride_bars": 8,
+  "output_dir": "data/research/xau_multi_session_pipeline_smoke"
+}

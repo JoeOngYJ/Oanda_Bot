@@ -1,0 +1,109 @@
+symbols:
+- EUR_USD
+- GBP_USD
+- USD_JPY
+- USD_CAD
+- GBP_JPY
+- XAU_USD
+ltf_timeframe: M15
+htf_timeframes:
+  h1: H1
+  d1: D1
+timezone: Europe/London
+exploration:
+  max_variants: 10
+  top_k: 3
+  min_trades: 30
+  regime_variants: []
+regime:
+  drop_last_htf_bar: true
+  strict_no_lookahead: true
+  weights:
+    h1: 0.6
+    d1: 0.4
+  thresholds:
+    slope_lookback: 5
+    swing_window: 20
+    swing_break_rate_window: 24
+    trend_min: 0.55
+    range_min: 0.55
+    transition_min: 0.5
+    exhaustion_min: 0.55
+    regime_margin: 0.03
+    transition_contraction_ratio: 0.85
+    transition_expansion_ratio: 1.1
+    exhaustion_extension_atr: 2.0
+    impulse_body_atr: 1.25
+sessions:
+  tokyo:
+  - 0
+  - 9
+  london:
+  - 8
+  - 17
+  newyork:
+  - 13
+  - 22
+  overlap:
+  - 13
+  - 17
+pair_overrides:
+  EUR_USD:
+    preferred_sessions:
+    - london
+    - overlap
+    preferred_styles:
+    - breakout
+    - trend
+  GBP_USD:
+    preferred_sessions:
+    - london
+    - overlap
+    preferred_styles:
+    - breakout
+    - reversal
+  USD_JPY:
+    preferred_sessions:
+    - tokyo
+    - overlap
+    preferred_styles:
+    - breakout
+  USD_CAD:
+    preferred_sessions:
+    - newyork
+    - overlap
+    preferred_styles:
+    - breakout
+    - trend
+  GBP_JPY:
+    preferred_sessions:
+    - london
+    - overlap
+    - tokyo
+    preferred_styles:
+    - breakout
+    - trend
+    stricter_filters: true
+  XAU_USD:
+    preferred_sessions:
+    - london
+    - overlap
+    preferred_styles:
+    - breakout
+    - reversal
+no_trade:
+  enabled: true
+  probability_threshold: 0.58
+model: {}
+splits:
+  folds: 8
+  train_ratio: 0.75
+barrier: {}
+cost: {}
+output:
+  ranking_csv: data/research/regime_strategy_ranking.csv
+  model_dir: models/research/regime_strategy
+  manifest_json: data/research/regime_strategy_manifest.json
+training:
+  years: 10
+  symbol_batch_size: 1

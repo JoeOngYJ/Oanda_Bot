@@ -172,6 +172,707 @@ def _resample_ohlcv_freq(df: pd.DataFrame, freq: str) -> pd.DataFrame:
     return out
 
 
+def _asof_series_to_index(index_utc: pd.DatetimeIndex, s: pd.Series, allow_exact: bool = True) -> pd.Series:
+    left = pd.DataFrame({"ts": pd.DatetimeIndex(index_utc).sort_values()})
+    right = pd.DataFrame({"ts": pd.DatetimeIndex(s.index), "v": pd.to_numeric(s, errors="coerce")}).sort_values("ts")
+    merged = pd.merge_asof(left, right, on="ts", direction="backward", allow_exact_matches=allow_exact)
+    out = pd.Series(merged["v"].to_numpy(), index=merged["ts"])
+    return out.reindex(index_utc)
+
+
+def compute_asia_range_features(df_m15: pd.DataFrame, tz: str = "Europe/London") -> pd.DataFrame:
+    """Session-anchored Asia features using completed 00:00-07:45 London bars only."""
+    x = _ensure_utc_index(df_m15)
+    idx_local = pd.DatetimeIndex(x.index).tz_convert(tz)
+    trade_date = idx_local.normalize()
+    minute_of_day = (idx_local.hour * 60) + idx_local.minute
+
+    atr14 = pd.to_numeric(x.get("atr14", _atr(x, 14)), errors="coerce")
+    asia_mask = (minute_of_day >= 0) & (minute_of_day <= ((7 * 60) + 45))
+    after_asia = minute_of_day >= (8 * 60)
+
+    asia_high_by_day = x.loc[asia_mask, "high"].groupby(trade_date[asia_mask]).max()
+    asia_low_by_day = x.loc[asia_mask, "low"].groupby(trade_date[asia_mask]).min()
+
+    day_index = pd.Index(trade_date)
+    asia_high = pd.Series(day_index.map(asia_high_by_day.to_dict()), index=x.index, dtype=float)
+    asia_low = pd.Series(day_index.map(asia_low_by_day.to_dict()), index=x.index, dtype=float)
+    asia_high = asia_high.where(after_asia, np.nan)
+    asia_low = asia_low.where(after_asia, np.nan)
+
+    asia_range = asia_high - asia_low
+    asia_mid = 0.5 * (asia_high + asia_low)
+    close = pd.to_numeric(x["close"], errors="coerce")
+
+    out = pd.DataFrame(index=x.index)
+    out["asia_high"] = asia_high
+    out["asia_low"] = asia_low
+    out["asia_range"] = asia_range
+    out["asia_mid"] = asia_mid
+    out["asia_range_atr"] = asia_range / (atr14 + 1e-9)
+    out["dist_to_asia_high_atr"] = (close - asia_high) / (atr14 + 1e-9)
+    out["dist_to_asia_low_atr"] = (close - asia_low) / (atr14 + 1e-9)
+    out["dist_to_asia_mid_atr"] = (close - asia_mid) / (atr14 + 1e-9)
+    return out.replace([np.inf, -np.inf], np.nan)
+
+
+def compute_london_open_features(df_m15: pd.DataFrame, tz: str = "Europe/London") -> pd.DataFrame:
+    """London-open anchored features (08:00 M15 bar), no lookahead, same-date forward fill only."""
+    x = _ensure_utc_index(df_m15)
+    idx_local = pd.DatetimeIndex(x.index).tz_convert(tz)
+    trade_date = idx_local.normalize()
+    minute_of_day = (idx_local.hour * 60) + idx_local.minute
+    after_lo = minute_of_day >= (8 * 60)
+
+    atr14 = pd.to_numeric(x.get("atr14", _atr(x, 14)), errors="coerce")
+    asia = compute_asia_range_features(x, tz=tz)
+    asia_high = pd.to_numeric(asia["asia_high"], errors="coerce")
+    asia_low = pd.to_numeric(asia["asia_low"], errors="coerce")
+
+    lo_mask = minute_of_day == (8 * 60)
+    lo_open_by_day = x.loc[lo_mask, "open"].groupby(trade_date[lo_mask]).first()
+    day_index = pd.Index(trade_date)
+    lo_open_price = pd.Series(day_index.map(lo_open_by_day.to_dict()), index=x.index, dtype=float).where(after_lo, np.nan)
+
+    high = pd.to_numeric(x["high"], errors="coerce")
+    low = pd.to_numeric(x["low"], errors="coerce")
+    close = pd.to_numeric(x["close"], errors="coerce")
+
+    break_up = high > asia_high
+    break_dn = low < asia_low
+    lo_break = pd.Series(np.where(break_up, 1, np.where(break_dn, -1, 0)), index=x.index, dtype=float).where(after_lo, np.nan)
+
+    out = pd.DataFrame(index=x.index)
+    out["lo_open_price"] = lo_open_price
+    out["dist_from_lo_open_atr"] = (close - lo_open_price) / (atr14 + 1e-9)
+    out["lo_break_of_asia"] = lo_break
+    out["lo_break_depth_up_atr"] = np.maximum(high - asia_high, 0.0) / (atr14 + 1e-9)
+    out["lo_break_depth_dn_atr"] = np.maximum(asia_low - low, 0.0) / (atr14 + 1e-9)
+    out.loc[~after_lo, ["lo_break_depth_up_atr", "lo_break_depth_dn_atr"]] = np.nan
+    return out.replace([np.inf, -np.inf], np.nan)
+
+
+def compute_htf_distance_features(df_m15: pd.DataFrame, df_h1: pd.DataFrame, df_d1: pd.DataFrame) -> pd.DataFrame:
+    """HTF structural distance features using completed bars only."""
+    x = _ensure_utc_index(df_m15)
+    _ = _ensure_utc_index(df_h1)  # kept for signature compatibility and future extensions
+    d1 = _ensure_utc_index(df_d1)
+
+    atr14 = pd.to_numeric(x.get("atr14", _atr(x, 14)), errors="coerce")
+    close = pd.to_numeric(x["close"], errors="coerce")
+
+    prev_day_high_s = pd.to_numeric(d1["high"], errors="coerce").shift(1)
+    prev_day_low_s = pd.to_numeric(d1["low"], errors="coerce").shift(1)
+    daily_range = (pd.to_numeric(d1["high"], errors="coerce") - pd.to_numeric(d1["low"], errors="coerce")).shift(1)
+    adr20_s = daily_range.rolling(20, min_periods=20).mean()
+
+    prev_day_high = _asof_series_to_index(x.index, prev_day_high_s, allow_exact=True)
+    prev_day_low = _asof_series_to_index(x.index, prev_day_low_s, allow_exact=True)
+    adr20 = _asof_series_to_index(x.index, adr20_s, allow_exact=True)
+
+    d1_week = pd.DataFrame(index=d1.index)
+    d1_week["high"] = pd.to_numeric(d1["high"], errors="coerce")
+    d1_week["low"] = pd.to_numeric(d1["low"], errors="coerce")
+    week_key = pd.DatetimeIndex(d1_week.index).tz_convert("UTC").tz_localize(None).to_period("W-SUN")
+    w_high = d1_week.groupby(week_key)["high"].max()
+    w_low = d1_week.groupby(week_key)["low"].min()
+    week_end = pd.DatetimeIndex(w_high.index.to_timestamp(how="end")).tz_localize("UTC")
+    prev_week_high_s = pd.Series(w_high.shift(1).to_numpy(), index=week_end, dtype=float).dropna()
+    prev_week_low_s = pd.Series(w_low.shift(1).to_numpy(), index=week_end, dtype=float).dropna()
+    prev_week_high = _asof_series_to_index(x.index, prev_week_high_s, allow_exact=True)
+    prev_week_low = _asof_series_to_index(x.index, prev_week_low_s, allow_exact=True)
+
+    asia = compute_asia_range_features(x)
+    asia_range = pd.to_numeric(asia["asia_range"], errors="coerce")
+
+    out = pd.DataFrame(index=x.index)
+    out["dist_prev_day_high_atr"] = (close - prev_day_high) / (atr14 + 1e-9)
+    out["dist_prev_day_low_atr"] = (close - prev_day_low) / (atr14 + 1e-9)
+    out["dist_prev_week_high_atr"] = (close - prev_week_high) / (atr14 + 1e-9)
+    out["dist_prev_week_low_atr"] = (close - prev_week_low) / (atr14 + 1e-9)
+    out["adr20"] = adr20
+    out["asia_range_pct_of_adr"] = asia_range / (adr20 + 1e-9)
+    return out.replace([np.inf, -np.inf], np.nan)
+
+
+def _winsorize_expanding_past(
+    df: pd.DataFrame,
+    lower_q: float = 0.01,
+    upper_q: float = 0.99,
+    min_periods: int = 128,
+    global_clip: Tuple[float, float] = (-50.0, 50.0),
+) -> pd.DataFrame:
+    """Past-only winsorization: thresholds computed from expanding history and shifted by 1 bar."""
+    out = df.copy()
+    lo_g, hi_g = float(global_clip[0]), float(global_clip[1])
+    for col in out.columns:
+        s = pd.to_numeric(out[col], errors="coerce")
+        lo = s.expanding(min_periods=min_periods).quantile(lower_q).shift(1)
+        hi = s.expanding(min_periods=min_periods).quantile(upper_q).shift(1)
+        mask = lo.notna() & hi.notna() & s.notna()
+        if mask.any():
+            s2 = s.copy()
+            s2.loc[mask] = s.loc[mask].clip(lower=lo.loc[mask], upper=hi.loc[mask])
+            s = s2
+        out[col] = s.clip(lower=lo_g, upper=hi_g)
+    return out
+
+
+def compute_candle_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
+    x = _ensure_utc_index(df)
+    o = pd.to_numeric(x["open"], errors="coerce")
+    h = pd.to_numeric(x["high"], errors="coerce")
+    l = pd.to_numeric(x["low"], errors="coerce")
+    c = pd.to_numeric(x["close"], errors="coerce")
+    eps = 1e-9
+
+    bar_range = (h - l).clip(lower=0.0)
+    upper_wick_pct = (h - np.maximum(o, c)) / np.maximum(bar_range, eps)
+    lower_wick_pct = (np.minimum(o, c) - l) / np.maximum(bar_range, eps)
+    close_location = (c - l) / np.maximum(bar_range, eps)
+    wick_imbalance = upper_wick_pct - lower_wick_pct
+    body_sign = np.sign(c - o)
+    body_direction_persist_3 = body_sign.shift(1).rolling(3, min_periods=3).mean()
+
+    out = pd.DataFrame(index=x.index)
+    out["bar_range"] = bar_range
+    out["upper_wick_pct"] = upper_wick_pct.clip(0.0, 1.0)
+    out["lower_wick_pct"] = lower_wick_pct.clip(0.0, 1.0)
+    out["close_location"] = close_location.clip(0.0, 1.0)
+    out["wick_imbalance"] = wick_imbalance.clip(-1.0, 1.0)
+    out["body_direction_persist_3"] = body_direction_persist_3.clip(-1.0, 1.0)
+    out = out.replace([np.inf, -np.inf], np.nan)
+    return _winsorize_expanding_past(out, lower_q=0.01, upper_q=0.99, min_periods=128, global_clip=(-20.0, 20.0))
+
+
+def compute_trend_quality_features(df: pd.DataFrame, lookbacks: tuple[int, ...] = (8, 16, 32)) -> pd.DataFrame:
+    x = _ensure_utc_index(df)
+    h = pd.to_numeric(x["high"], errors="coerce")
+    l = pd.to_numeric(x["low"], errors="coerce")
+    c = pd.to_numeric(x["close"], errors="coerce")
+    eps = 1e-9
+
+    diff = c.diff()
+    abs_diff = diff.abs()
+    sign_diff = np.sign(diff)
+    tr = pd.concat(
+        [
+            (h - l).abs(),
+            (h - c.shift(1)).abs(),
+            (l - c.shift(1)).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+
+    out = pd.DataFrame(index=x.index)
+    for n0 in lookbacks:
+        n = int(n0)
+        if n <= 1:
+            continue
+        eff_ratio = (c - c.shift(n)).abs() / (abs_diff.rolling(n, min_periods=n).sum() + eps)
+        directional_consistency = sign_diff.rolling(n, min_periods=n).sum().abs() / float(n)
+        rolling_high_n = h.shift(1).rolling(n, min_periods=n).max()
+        rolling_low_n = l.shift(1).rolling(n, min_periods=n).min()
+        choppiness = 100.0 * np.log10((tr.rolling(n, min_periods=n).sum() + eps) / np.maximum((rolling_high_n - rolling_low_n), eps)) / np.log10(float(n))
+
+        out[f"eff_ratio_{n}"] = eff_ratio
+        out[f"directional_consistency_{n}"] = directional_consistency
+        out[f"choppiness_{n}"] = choppiness
+
+    out = out.replace([np.inf, -np.inf], np.nan)
+    for col in [c for c in out.columns if c.startswith("eff_ratio_") or c.startswith("directional_consistency_")]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").clip(0.0, 1.0)
+    for col in [c for c in out.columns if c.startswith("choppiness_")]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").clip(0.0, 100.0)
+    return _winsorize_expanding_past(out, lower_q=0.01, upper_q=0.99, min_periods=128, global_clip=(-20.0, 120.0))
+
+
+def compute_distribution_shape_features(df: pd.DataFrame, lookbacks: tuple[int, ...] = (16, 32)) -> pd.DataFrame:
+    x = _ensure_utc_index(df)
+    c = pd.to_numeric(x["close"], errors="coerce")
+    ret1 = c.pct_change()
+
+    out = pd.DataFrame(index=x.index)
+    for n0 in lookbacks:
+        n = int(n0)
+        if n <= 2:
+            continue
+        out[f"ret_skew_{n}"] = ret1.rolling(n, min_periods=n).skew()
+        out[f"ret_kurt_{n}"] = ret1.rolling(n, min_periods=n).kurt()
+        out[f"downside_semivar_{n}"] = np.square(np.minimum(ret1, 0.0)).rolling(n, min_periods=n).mean()
+
+    out = out.replace([np.inf, -np.inf], np.nan)
+    for col in [c for c in out.columns if c.startswith("downside_semivar_")]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").clip(lower=0.0)
+    return _winsorize_expanding_past(out, lower_q=0.01, upper_q=0.99, min_periods=128, global_clip=(-10.0, 10.0))
+
+
+def compute_sweep_features(df: pd.DataFrame, lookbacks: tuple[int, ...] = (4, 8, 16)) -> pd.DataFrame:
+    x = _ensure_utc_index(df)
+    h = pd.to_numeric(x["high"], errors="coerce")
+    l = pd.to_numeric(x["low"], errors="coerce")
+    c = pd.to_numeric(x["close"], errors="coerce")
+    out = pd.DataFrame(index=x.index)
+    for n0 in lookbacks:
+        n = int(n0)
+        if n <= 1:
+            continue
+        prev_high_n = h.shift(1).rolling(n, min_periods=n).max()
+        prev_low_n = l.shift(1).rolling(n, min_periods=n).min()
+        took_prev_high_n = (h > prev_high_n).astype(float)
+        took_prev_low_n = (l < prev_low_n).astype(float)
+        close_back_inside_high_n = (c < prev_high_n).astype(float)
+        close_back_inside_low_n = (c > prev_low_n).astype(float)
+        out[f"took_prev_high_{n}"] = took_prev_high_n
+        out[f"took_prev_low_{n}"] = took_prev_low_n
+        out[f"close_back_inside_high_{n}"] = close_back_inside_high_n
+        out[f"close_back_inside_low_{n}"] = close_back_inside_low_n
+        out[f"sweep_reject_high_{n}"] = took_prev_high_n * close_back_inside_high_n
+        out[f"sweep_reject_low_{n}"] = took_prev_low_n * close_back_inside_low_n
+    return out.replace([np.inf, -np.inf], np.nan)
+
+
+def drop_redundant_features(df: pd.DataFrame, corr_threshold: float = 0.92) -> list[str]:
+    x = df.copy()
+    cols = list(x.columns)
+    if not cols:
+        return []
+    corr = x.corr(numeric_only=True).abs()
+    keep: List[str] = []
+    for c in cols:
+        if c not in corr.columns:
+            keep.append(c)
+            continue
+        drop = False
+        for k in keep:
+            if (k in corr.index) and (c in corr.columns):
+                v = corr.loc[k, c]
+                if pd.notna(v) and float(v) >= float(corr_threshold):
+                    drop = True
+                    break
+        if not drop:
+            keep.append(c)
+    return keep
+
+
+def select_and_transform_features(df: pd.DataFrame, feature_cols: list[str]) -> tuple[pd.DataFrame, dict]:
+    x = df.reindex(columns=list(feature_cols)).copy()
+    cols = list(x.columns)
+
+    # 1) Remove duplicate session encodings (prefer sess_* over is_*).
+    has_is = any(c.startswith("is_") for c in cols)
+    has_sess = any(c.startswith("sess_") for c in cols)
+    if has_is and has_sess:
+        cols = [c for c in cols if not c.startswith("is_")]
+
+    # 2) Remove raw HTF levels; keep normalized distances/scores only.
+    raw_htf_tokens = (
+        "_ema20",
+        "_ema50",
+        "_ema200",
+        "_bb_up",
+        "_bb_dn",
+        "_rolling_high",
+        "_rolling_low",
+        "_atr14",
+    )
+    cols = [c for c in cols if not (c.startswith("h1_") or c.startswith("d1_")) or not any(tok in c for tok in raw_htf_tokens)]
+
+    # 3) Drop carry proxy by default; optional override via config column flag.
+    cols = [c for c in cols if c != "carry_proxy"]
+
+    # 4) Drop integer-coded regime IDs unless explicitly one-hot encoded.
+    invalid_regime_cols = []
+    for c in cols:
+        if c in {"regime_variant_id", "h1_regime", "d1_regime", "regime"}:
+            invalid_regime_cols.append(c)
+            continue
+        s = x[c]
+        if pd.api.types.is_integer_dtype(s) and ("regime" in c.lower()) and ("_onehot_" not in c.lower()):
+            invalid_regime_cols.append(c)
+    cols = [c for c in cols if c not in set(invalid_regime_cols)]
+
+    # 5) Deterministic order preserved, then remove high-corr redundancy.
+    x = x.reindex(columns=cols)
+    keep = drop_redundant_features(x, corr_threshold=0.92)
+    x = x.reindex(columns=keep)
+
+    stats: Dict[str, Any] = {
+        "selected_columns": list(x.columns),
+        "scalers": {},
+        "dropped_invalid_regime_cols": invalid_regime_cols,
+    }
+
+    # 6) Fit scaling on provided frame only (caller should pass train fold).
+    out = pd.DataFrame(index=x.index)
+    for c in x.columns:
+        s = pd.to_numeric(x[c], errors="coerce")
+        if s.notna().sum() == 0:
+            out[c] = s
+            stats["scalers"][c] = {"method": "none"}
+            continue
+        q01 = float(s.quantile(0.01))
+        q99 = float(s.quantile(0.99))
+        s_clip = s.clip(lower=q01, upper=q99)
+
+        # Robust scaling for fat tails.
+        skew = float(s_clip.skew()) if s_clip.notna().sum() > 3 else 0.0
+        kurt = float(s_clip.kurt()) if s_clip.notna().sum() > 3 else 0.0
+        fat_tail = (abs(skew) > 1.0) or (kurt > 3.0)
+        if fat_tail:
+            med = float(s_clip.median())
+            q25 = float(s_clip.quantile(0.25))
+            q75 = float(s_clip.quantile(0.75))
+            iqr = max(q75 - q25, 1e-9)
+            z = (s_clip - med) / iqr
+            stats["scalers"][c] = {"method": "robust", "median": med, "iqr": iqr, "clip_q01": q01, "clip_q99": q99}
+        else:
+            mu = float(s_clip.mean())
+            sd = float(s_clip.std(ddof=0))
+            sd = sd if sd > 1e-9 else 1.0
+            z = (s_clip - mu) / sd
+            stats["scalers"][c] = {"method": "zscore", "mean": mu, "std": sd, "clip_q01": q01, "clip_q99": q99}
+        out[c] = z
+
+    out = out.replace([np.inf, -np.inf], np.nan)
+    return out, stats
+
+
+def compute_vol_scaled_triple_barrier_labels(
+    df: pd.DataFrame,
+    sigma_col: str,
+    up_mult: float,
+    dn_mult: float,
+    min_horizon_bars: int,
+    max_horizon_bars: int,
+) -> pd.DataFrame:
+    x = _ensure_utc_index(df)
+    close = pd.to_numeric(x["close"], errors="coerce")
+    sigma = pd.to_numeric(x[sigma_col], errors="coerce").ffill().bfill().fillna(0.0)
+    n = int(len(x))
+    min_h = max(1, int(min_horizon_bars))
+    max_h = max(min_h, int(max_horizon_bars))
+
+    # Deterministic horizon from sigma_t only: higher sigma => shorter horizon.
+    sig_norm = (sigma / (1.0 + sigma)).clip(0.0, 1.0)
+    h_float = (max_h - (max_h - min_h) * sig_norm).fillna(float(max_h))
+    horizons = np.rint(h_float.to_numpy(dtype=float)).astype(int)
+    horizons = np.clip(horizons, min_h, max_h)
+
+    label_side = np.zeros(n, dtype=int)
+    label_end = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
+    label_hbars = horizons.astype(int)
+
+    idx = pd.DatetimeIndex(x.index)
+    for i in range(n):
+        if pd.isna(close.iloc[i]) or pd.isna(sigma.iloc[i]):
+            continue
+        h_i = int(label_hbars[i])
+        end_i = min(n - 1, i + h_i)
+        up_barrier = float(close.iloc[i] * (1.0 + float(up_mult) * float(sigma.iloc[i])))
+        dn_barrier = float(close.iloc[i] * (1.0 - float(dn_mult) * float(sigma.iloc[i])))
+        side = 0
+        end_ts = idx[end_i]
+        for j in range(i + 1, end_i + 1):
+            px = float(close.iloc[j])
+            if px >= up_barrier:
+                side = 1
+                end_ts = idx[j]
+                break
+            if px <= dn_barrier:
+                side = -1
+                end_ts = idx[j]
+                break
+        label_side[i] = int(side)
+        label_end[i] = end_ts.tz_convert("UTC").tz_localize(None) if isinstance(end_ts, pd.Timestamp) else pd.NaT
+
+    out = pd.DataFrame(index=x.index)
+    out["label_side"] = label_side
+    out["label_end_ts"] = pd.to_datetime(label_end, utc=True, errors="coerce")
+    out["label_horizon_bars"] = label_hbars
+    return out
+
+
+def compute_meta_label(
+    df: pd.DataFrame,
+    base_prob_col: str,
+    realized_net_edge_col: str,
+    base_threshold: float,
+) -> pd.Series:
+    p = pd.to_numeric(df[base_prob_col], errors="coerce").fillna(0.0)
+    edge = pd.to_numeric(df[realized_net_edge_col], errors="coerce").fillna(0.0)
+    return ((p >= float(base_threshold)) & (edge > 0.0)).astype(int)
+
+
+def generate_purged_walkforward_splits(
+    index: pd.Index,
+    label_end_ts: pd.Series,
+    n_splits: int,
+    test_size: int,
+    embargo_bars: int,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    idx = pd.DatetimeIndex(index)
+    n = len(idx)
+    tsz = max(1, int(test_size))
+    ns = max(1, int(n_splits))
+    emb = max(0, int(embargo_bars))
+    if n < tsz + 2:
+        return []
+
+    total_test = ns * tsz
+    start0 = max(0, n - total_test)
+    splits: list[tuple[np.ndarray, np.ndarray]] = []
+    end_series = pd.to_datetime(label_end_ts, utc=True, errors="coerce").reindex(idx)
+    start_series = pd.Series(idx, index=idx)
+
+    for k in range(ns):
+        t0 = start0 + (k * tsz)
+        t1 = min(n, t0 + tsz)
+        if t1 <= t0:
+            continue
+        test_idx = np.arange(t0, t1, dtype=int)
+        test_start = idx[t0]
+        test_end = idx[t1 - 1]
+
+        overlap = (start_series <= test_end) & (end_series >= test_start)
+        overlap = overlap.fillna(False)
+
+        embargo_mask = pd.Series(False, index=idx)
+        emb_end_pos = min(n - 1, (t1 - 1) + emb)
+        if emb_end_pos > (t1 - 1):
+            embargo_mask.iloc[t1 : emb_end_pos + 1] = True
+
+        test_mask = pd.Series(False, index=idx)
+        test_mask.iloc[t0:t1] = True
+        train_mask = ~(test_mask | overlap | embargo_mask)
+        train_idx = np.where(train_mask.to_numpy())[0].astype(int)
+        splits.append((train_idx, test_idx))
+    return splits
+
+
+def compute_fold_diagnostics(y_true, y_prob, costs, fold_id) -> dict:
+    y = pd.to_numeric(pd.Series(y_true), errors="coerce")
+    p = pd.to_numeric(pd.Series(y_prob), errors="coerce").clip(1e-6, 1 - 1e-6)
+    m = y.notna() & p.notna()
+    y = y[m].astype(float)
+    p = p[m].astype(float)
+    if len(y) == 0:
+        return {"fold_id": fold_id, "n": 0}
+
+    brier = float(((p - y) ** 2).mean())
+    logloss = float(-(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)).mean())
+
+    # Calibration fit y ~= a + b*logit(p)
+    lp = np.log(p / (1.0 - p))
+    slope = np.nan
+    intercept = np.nan
+    if len(y) >= 20 and np.isfinite(lp).all():
+        X = np.column_stack([np.ones(len(lp)), lp.to_numpy()])
+        try:
+            beta = np.linalg.lstsq(X, y.to_numpy(), rcond=None)[0]
+            intercept = float(beta[0])
+            slope = float(beta[1])
+        except Exception:
+            pass
+
+    if isinstance(costs, dict):
+        gross_win = pd.to_numeric(pd.Series(costs.get("gross_win", 1.0)), errors="coerce").reindex(y.index, fill_value=1.0)
+        gross_loss = pd.to_numeric(pd.Series(costs.get("gross_loss", 1.0)), errors="coerce").reindex(y.index, fill_value=1.0)
+        expected_cost = pd.to_numeric(pd.Series(costs.get("expected_cost", 0.0)), errors="coerce").reindex(y.index, fill_value=0.0)
+        realized_r = pd.to_numeric(pd.Series(costs.get("realized_r", 0.0)), errors="coerce").reindex(y.index, fill_value=0.0)
+        thr = float(costs.get("threshold", 0.5))
+    else:
+        gross_win = pd.Series(1.0, index=y.index)
+        gross_loss = pd.Series(1.0, index=y.index)
+        expected_cost = pd.Series(0.0, index=y.index)
+        realized_r = pd.Series(0.0, index=y.index)
+        thr = 0.5
+
+    ev = (p * gross_win) - ((1.0 - p) * gross_loss) - expected_cost
+    trade_mask = p >= thr
+    trade_count = int(trade_mask.sum())
+    hit_rate = float(y[trade_mask].mean()) if trade_count > 0 else 0.0
+    ev_at_threshold = float(ev[trade_mask].mean()) if trade_count > 0 else 0.0
+
+    eq = (1.0 + realized_r.where(trade_mask, 0.0).fillna(0.0)).cumprod()
+    peak = eq.cummax().replace(0, np.nan)
+    dd = ((peak - eq) / peak).fillna(0.0)
+    max_dd = float(dd.max()) if len(dd) > 0 else 0.0
+
+    return {
+        "fold_id": fold_id,
+        "n": int(len(y)),
+        "brier_score": brier,
+        "log_loss": logloss,
+        "calibration_slope": slope,
+        "calibration_intercept": intercept,
+        "expected_value_at_threshold": ev_at_threshold,
+        "trade_count": trade_count,
+        "hit_rate": hit_rate,
+        "max_drawdown": max_dd,
+    }
+
+
+def _fit_logistic_gd(X: np.ndarray, y: np.ndarray, max_iter: int = 300, lr: float = 0.05, l2: float = 1e-6, seed: int = 42) -> np.ndarray:
+    rng = np.random.default_rng(int(seed))
+    w = rng.normal(0.0, 1e-3, size=X.shape[1])
+    yv = y.astype(float)
+    for _ in range(max_iter):
+        z = X @ w
+        p = 1.0 / (1.0 + np.exp(-np.clip(z, -40, 40)))
+        g = (X.T @ (p - yv)) / max(1, len(yv))
+        g += l2 * w
+        w = w - (lr * g)
+    return w
+
+
+def fit_beta_calibrator(p_raw: np.ndarray, y: np.ndarray):
+    p = np.clip(np.asarray(p_raw, dtype=float), 1e-6, 1 - 1e-6)
+    yy = np.asarray(y, dtype=float)
+    if len(p) < 30:
+        return fit_platt_calibrator(p, yy)
+    X = np.column_stack([np.ones(len(p)), np.log(p), np.log(1.0 - p)])
+    try:
+        w = _fit_logistic_gd(X, yy, max_iter=400, lr=0.05, l2=1e-6, seed=42)
+        return {"type": "beta", "w": w.tolist()}
+    except Exception:
+        return fit_platt_calibrator(p, yy)
+
+
+def apply_beta_calibrator(calibrator, p_raw: np.ndarray) -> np.ndarray:
+    p = np.clip(np.asarray(p_raw, dtype=float), 1e-6, 1 - 1e-6)
+    if not isinstance(calibrator, dict):
+        return p
+    ctype = str(calibrator.get("type", ""))
+    if ctype == "beta":
+        w = np.asarray(calibrator.get("w", [0.0, 1.0, -1.0]), dtype=float)
+        X = np.column_stack([np.ones(len(p)), np.log(p), np.log(1.0 - p)])
+        z = X @ w
+        return 1.0 / (1.0 + np.exp(-np.clip(z, -40, 40)))
+    if ctype == "platt":
+        a = float(calibrator.get("a", 1.0))
+        b = float(calibrator.get("b", 0.0))
+        z = a * np.log(p / (1.0 - p)) + b
+        return 1.0 / (1.0 + np.exp(-np.clip(z, -40, 40)))
+    if ctype == "isotonic":
+        xp = np.asarray(calibrator.get("x", []), dtype=float)
+        fp = np.asarray(calibrator.get("y", []), dtype=float)
+        if len(xp) >= 2 and len(fp) == len(xp):
+            return np.interp(p, xp, fp, left=fp[0], right=fp[-1])
+    return p
+
+
+def fit_platt_calibrator(p_raw: np.ndarray, y: np.ndarray):
+    p = np.clip(np.asarray(p_raw, dtype=float), 1e-6, 1 - 1e-6)
+    yy = np.asarray(y, dtype=float)
+    X = np.column_stack([np.ones(len(p)), np.log(p / (1.0 - p))])
+    w = _fit_logistic_gd(X, yy, max_iter=300, lr=0.05, l2=1e-6, seed=42)
+    return {"type": "platt", "a": float(w[1]), "b": float(w[0])}
+
+
+def fit_isotonic_calibrator(p_raw: np.ndarray, y: np.ndarray):
+    p = np.clip(np.asarray(p_raw, dtype=float), 0.0, 1.0)
+    yy = np.asarray(y, dtype=float)
+    try:
+        from sklearn.isotonic import IsotonicRegression  # type: ignore
+
+        ir = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
+        yhat = ir.fit_transform(p, yy)
+        xp = np.asarray(p, dtype=float)
+        ord_idx = np.argsort(xp)
+        xp = xp[ord_idx]
+        fp = np.asarray(yhat, dtype=float)[ord_idx]
+        # collapse duplicate xp deterministically
+        uxp, idx_first = np.unique(xp, return_index=True)
+        ufp = fp[idx_first]
+        return {"type": "isotonic", "x": uxp.tolist(), "y": ufp.tolist()}
+    except Exception:
+        return fit_platt_calibrator(p, yy)
+
+
+def fit_probability_calibrator(
+    p_raw: np.ndarray,
+    y: np.ndarray,
+    regime_bucket: np.ndarray | None = None,
+    isotonic_min_samples: int = 1000,
+    bucket_min_samples: int = 300,
+):
+    p = np.asarray(p_raw, dtype=float)
+    yy = np.asarray(y, dtype=float)
+    n = len(p)
+    if regime_bucket is not None:
+        b = np.asarray(regime_bucket)
+        out = {"type": "bucketed", "models": {}}
+        for key in [0, 1]:
+            m = b == key
+            if int(m.sum()) < int(bucket_min_samples):
+                continue
+            if int(m.sum()) >= int(isotonic_min_samples):
+                out["models"][str(key)] = fit_isotonic_calibrator(p[m], yy[m])
+            else:
+                out["models"][str(key)] = fit_beta_calibrator(p[m], yy[m])
+        if out["models"]:
+            return out
+    if n >= int(isotonic_min_samples):
+        return fit_isotonic_calibrator(p, yy)
+    return fit_beta_calibrator(p, yy)
+
+
+def apply_probability_calibrator(calibrator, p_raw: np.ndarray, regime_bucket: np.ndarray | None = None) -> np.ndarray:
+    p = np.asarray(p_raw, dtype=float)
+    if not isinstance(calibrator, dict):
+        return np.clip(p, 0.0, 1.0)
+    if calibrator.get("type") == "bucketed" and regime_bucket is not None:
+        b = np.asarray(regime_bucket)
+        out = np.clip(p.copy(), 0.0, 1.0)
+        for key, model in calibrator.get("models", {}).items():
+            m = b == int(key)
+            if m.any():
+                out[m] = apply_beta_calibrator(model, out[m])
+        return np.clip(out, 0.0, 1.0)
+    return np.clip(apply_beta_calibrator(calibrator, p), 0.0, 1.0)
+
+
+def compute_expected_value(
+    p_up: pd.Series,
+    gross_win: pd.Series,
+    gross_loss: pd.Series,
+    expected_cost: pd.Series,
+) -> pd.Series:
+    p = pd.to_numeric(pd.Series(p_up), errors="coerce").fillna(0.0)
+    idx = p.index
+    gw = pd.Series(pd.to_numeric(pd.Series(gross_win), errors="coerce").fillna(0.0).to_numpy(), index=idx)
+    gl = pd.Series(pd.to_numeric(pd.Series(gross_loss), errors="coerce").fillna(0.0).to_numpy(), index=idx)
+    ec = pd.Series(pd.to_numeric(pd.Series(expected_cost), errors="coerce").fillna(0.0).to_numpy(), index=idx)
+    n = min(len(p), len(gw), len(gl), len(ec))
+    p = p.iloc[:n]
+    gw = gw.iloc[:n]
+    gl = gl.iloc[:n]
+    ec = ec.iloc[:n]
+    return (p * gw) - ((1.0 - p) * gl) - ec
+
+
+def apply_trade_gating(
+    df: pd.DataFrame,
+    p_col: str,
+    ev_col: str,
+    min_ev: float,
+    base_p_threshold: float,
+    dynamic_threshold_col: str | None = None,
+) -> pd.Series:
+    p = pd.to_numeric(df[p_col], errors="coerce").fillna(0.0)
+    ev = pd.to_numeric(df[ev_col], errors="coerce").fillna(0.0)
+    thr = pd.Series(float(base_p_threshold), index=df.index, dtype=float)
+    if dynamic_threshold_col and dynamic_threshold_col in df.columns:
+        dyn = pd.to_numeric(df[dynamic_threshold_col], errors="coerce")
+        thr = dyn.where(dyn.notna(), thr)
+    return ((ev > float(min_ev)) & (p > thr)).astype(int)
+
+
+def set_deterministic_seed(seed: int = 42) -> None:
+    np.random.seed(int(seed))
+
+
 def _backfill_in_small_chunks(
     dm: DataManager,
     symbol: str,
@@ -365,6 +1066,31 @@ def make_features(df: pd.DataFrame, timeframe: str, config: Dict[str, Any]) -> p
     out["slippage_proxy_bps"] = (base_spread * stress * event_stress).clip(0.2, 25.0)
     out["expected_cost_proxy_bps"] = out["spread_proxy_bps"] + out["slippage_proxy_bps"]
 
+    # Module 1/2/3 feature blocks (all backward-computable).
+    x_ext = x.copy()
+    x_ext["atr14"] = atr14
+    tz_name = str((config or {}).get("timezone", "Europe/London"))
+    asia = compute_asia_range_features(x_ext, tz=tz_name)
+    lo = compute_london_open_features(x_ext, tz=tz_name)
+
+    # Prefer externally provided HTF frames; fallback to deterministic resample from LTF.
+    h1_df = (config or {}).get("_df_h1")
+    d1_df = (config or {}).get("_df_d1")
+    if isinstance(h1_df, pd.DataFrame) and isinstance(d1_df, pd.DataFrame):
+        htf_dist = compute_htf_distance_features(x_ext, h1_df, d1_df)
+    else:
+        h1_local = _resample_ohlcv_freq(x[["open", "high", "low", "close", "volume"]], "1H")
+        d1_local = _resample_ohlcv_freq(x[["open", "high", "low", "close", "volume"]], "1D")
+        htf_dist = compute_htf_distance_features(x_ext, h1_local, d1_local)
+
+    micro = compute_candle_microstructure_features(x_ext)
+    trend_q = compute_trend_quality_features(x_ext, lookbacks=tuple((config or {}).get("trend_quality_lookbacks", (8, 16, 32))))
+    dist_shape = compute_distribution_shape_features(
+        x_ext, lookbacks=tuple((config or {}).get("distribution_lookbacks", (16, 32)))
+    )
+    sweep = compute_sweep_features(x_ext, lookbacks=tuple((config or {}).get("sweep_lookbacks", (4, 8, 16))))
+    out = pd.concat([out, asia, lo, htf_dist, micro, trend_q, dist_shape, sweep], axis=1)
+
     out = out.replace([np.inf, -np.inf], np.nan)
     return out
 
@@ -500,6 +1226,30 @@ def walkforward_train_eval(X: pd.DataFrame, y: pd.Series, model_cfg: Dict[str, A
     folds = int(splits_cfg.get("folds", 5))
     min_train = int(splits_cfg.get("min_train", 200))
     ridge = float(model_cfg.get("ridge", 1e-3))
+    custom_splits = splits_cfg.get("custom_splits")
+
+    if isinstance(custom_splits, list) and len(custom_splits) > 0:
+        models: List[_LinearProbModel] = []
+        oof = pd.Series(index=Xv.index, dtype=float)
+        for split in custom_splits:
+            if not isinstance(split, (list, tuple)) or len(split) != 2:
+                continue
+            tr_idx = np.asarray(split[0], dtype=int)
+            te_idx = np.asarray(split[1], dtype=int)
+            if len(tr_idx) < min_train or len(te_idx) == 0:
+                continue
+            tr_idx = tr_idx[(tr_idx >= 0) & (tr_idx < len(Xv))]
+            te_idx = te_idx[(te_idx >= 0) & (te_idx < len(Xv))]
+            if len(tr_idx) < min_train or len(te_idx) == 0:
+                continue
+            Xtr, ytr = Xv.iloc[tr_idx], yv.iloc[tr_idx]
+            Xte = Xv.iloc[te_idx]
+            model = _fit_linear_prob(Xtr, ytr, ridge=ridge)
+            p = model.predict_proba(Xte)[:, 1]
+            oof.iloc[te_idx] = p
+            models.append(model)
+        if models:
+            return {"oof_proba": oof.ffill().fillna(0.5), "folds": len(models), "split_mode": "purged_custom"}, models
 
     base_train = max(min_train, int(n * train_ratio))
     rem = n - base_train

@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional
 
 import numpy as np
+try:
+    import cupy as cp  # type: ignore
+    _CUPY_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency
+    cp = None
+    _CUPY_AVAILABLE = False
 
 from backtesting.core.backtester import FeatureEngineer, RegimePredictor
 from backtesting.data.models import OHLCVBar
@@ -40,7 +46,7 @@ class RegimeFeatureEngineer(FeatureEngineer):
     ret_1, ret_4, vol_20, range_pct, range_ma_20, trend_strength, atr_pct
     """
 
-    def __init__(self):
+    def __init__(self, use_gpu: bool = False):
         self._close: Deque[float] = deque(maxlen=256)
         self._high: Deque[float] = deque(maxlen=256)
         self._low: Deque[float] = deque(maxlen=256)
@@ -50,6 +56,7 @@ class RegimeFeatureEngineer(FeatureEngineer):
         self._ema_slow: Optional[float] = None
         self._alpha_fast = 2.0 / (20.0 + 1.0)
         self._alpha_slow = 2.0 / (50.0 + 1.0)
+        self.use_gpu = bool(use_gpu and _CUPY_AVAILABLE)
 
     def compute(self, bar: OHLCVBar, state: Dict[str, Any]) -> Dict[str, Any]:
         c = float(bar.close)
@@ -101,12 +108,18 @@ class RegimeFeatureEngineer(FeatureEngineer):
 class MultiTimeframeRegimeFeatureEngineer(FeatureEngineer):
     """Compute runtime features for M15/H1/H4-prefixed trained models."""
 
-    def __init__(self):
+    def __init__(self, use_gpu: bool = False):
+        self.use_gpu = bool(use_gpu and _CUPY_AVAILABLE)
+        self._xp = cp if self.use_gpu else np
         self._close: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
         self._high: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
         self._low: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
         self._open: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
         self._vol: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=300))
+        self._ema20: Dict[str, Optional[float]] = defaultdict(lambda: None)
+        self._ema50: Dict[str, Optional[float]] = defaultdict(lambda: None)
+        self._alpha20 = 2.0 / 21.0
+        self._alpha50 = 2.0 / 51.0
 
     def on_market_bar(self, bar: OHLCVBar, state: Dict[str, Any]) -> None:
         tf_name = str(bar.timeframe.name).lower()
@@ -117,44 +130,62 @@ class MultiTimeframeRegimeFeatureEngineer(FeatureEngineer):
         self._low[tf_name].append(float(bar.low))
         self._open[tf_name].append(float(bar.open))
         self._vol[tf_name].append(float(bar.volume))
+        c = float(bar.close)
+        if self._ema20[tf_name] is None:
+            self._ema20[tf_name] = c
+        else:
+            self._ema20[tf_name] = self._alpha20 * c + (1.0 - self._alpha20) * float(self._ema20[tf_name])
+        if self._ema50[tf_name] is None:
+            self._ema50[tf_name] = c
+        else:
+            self._ema50[tf_name] = self._alpha50 * c + (1.0 - self._alpha50) * float(self._ema50[tf_name])
 
     def compute(self, bar: OHLCVBar, state: Dict[str, Any]) -> Dict[str, Any]:
         tf_name = str(bar.timeframe.name).lower()
         if tf_name != "m15":
             return {}
 
+        xp = self._xp
         out = {}
         for key in ("m15", "h1", "h4", "d1"):
-            c = np.asarray(self._close[key], dtype=np.float64)
-            h = np.asarray(self._high[key], dtype=np.float64)
-            l = np.asarray(self._low[key], dtype=np.float64)
-            o = np.asarray(self._open[key], dtype=np.float64)
-            v = np.asarray(self._vol[key], dtype=np.float64)
+            c = xp.asarray(self._close[key], dtype=xp.float64)
+            h = xp.asarray(self._high[key], dtype=xp.float64)
+            l = xp.asarray(self._low[key], dtype=xp.float64)
+            o = xp.asarray(self._open[key], dtype=xp.float64)
+            v = xp.asarray(self._vol[key], dtype=xp.float64)
             if len(c) < 5:
                 continue
-            prev_c = np.roll(c, 1)
+            prev_c = xp.roll(c, 1)
             prev_c[0] = c[0]
-            tr = np.maximum.reduce([h - l, np.abs(h - prev_c), np.abs(l - prev_c)])
+            tr = xp.maximum(xp.maximum(h - l, xp.abs(h - prev_c)), xp.abs(l - prev_c))
             atr_lookback = min(14, len(tr))
-            atr = np.mean(tr[-atr_lookback:])
-            ret1 = (c[-1] / c[-2]) - 1.0 if c[-2] else 0.0
-            ret4 = (c[-1] / c[-5]) - 1.0 if len(c) >= 5 and c[-5] else 0.0
-            ema20 = self._ema(c, 20)
-            ema50 = self._ema(c, 50)
-            trend = (ema20 - ema50) / c[-1] if c[-1] else 0.0
+            atr = xp.mean(tr[-atr_lookback:])
+            c_last = float(c[-1])
+            c_prev1 = float(c[-2])
+            c_prev4 = float(c[-5]) if len(c) >= 5 else 0.0
+            o_last = float(o[-1])
+            h_last = float(h[-1])
+            l_last = float(l[-1])
+            v_last = float(v[-1])
+            ret1 = (c_last / c_prev1) - 1.0 if c_prev1 else 0.0
+            ret4 = (c_last / c_prev4) - 1.0 if c_prev4 else 0.0
+            ema20 = self._ema20[key]
+            ema50 = self._ema50[key]
+            trend = ((ema20 - ema50) / c_last) if (ema20 is not None and ema50 is not None and c_last) else 0.0
             band_lookback = min(20, len(c))
-            sma20 = np.mean(c[-band_lookback:])
-            std20 = np.std(c[-band_lookback:])
+            sma20 = float(xp.mean(c[-band_lookback:]))
+            std20 = float(xp.std(c[-band_lookback:]))
             bbw = (2.0 * 2.0 * std20 / sma20) if sma20 else 0.0
-            body_pct = ((c[-1] - o[-1]) / o[-1]) if o[-1] else 0.0
-            range_pct = ((h[-1] - l[-1]) / c[-1]) if c[-1] else 0.0
+            body_pct = ((c_last - o_last) / o_last) if o_last else 0.0
+            range_pct = ((h_last - l_last) / c_last) if c_last else 0.0
             vol_lookback = min(20, len(v))
             vol_recent = v[-vol_lookback:]
-            vol_std = float(np.std(vol_recent))
-            vol_z = 0.0 if vol_std == 0.0 else float((v[-1] - np.mean(vol_recent)) / vol_std)
+            vol_std = float(xp.std(vol_recent))
+            vol_mean = float(xp.mean(vol_recent))
+            vol_z = 0.0 if vol_std == 0.0 else float((v_last - vol_mean) / vol_std)
             out[f"{key}_ret1"] = float(ret1)
             out[f"{key}_ret4"] = float(ret4)
-            out[f"{key}_atr_pct"] = float(atr / c[-1]) if c[-1] else 0.0
+            out[f"{key}_atr_pct"] = float(atr / c_last) if c_last else 0.0
             out[f"{key}_trend"] = float(trend)
             out[f"{key}_bbw"] = float(bbw)
             out[f"{key}_body_pct"] = float(body_pct)
@@ -173,38 +204,40 @@ class MultiTimeframeRegimeFeatureEngineer(FeatureEngineer):
                 out[f"{key}_wday_cos"] = float(np.cos((2.0 * np.pi * wday) / 7.0))
         return out
 
-    @staticmethod
-    def _ema(a: np.ndarray, n: int) -> float:
-        alpha = 2.0 / (n + 1.0)
-        ema = a[0]
-        for x in a[1:]:
-            ema = alpha * x + (1.0 - alpha) * ema
-        return float(ema)
-
 
 class KMeansRegimePredictor(RegimePredictor):
     """Predict regime by nearest centroid from exported research model."""
 
-    def __init__(self, model: RegimeModel):
+    def __init__(self, model: RegimeModel, use_gpu: bool = False):
         self.model = model
         self.regime_counts: Dict[str, int] = {}
         self.last_probabilities: Dict[str, float] = {}
+        self.use_gpu = bool(use_gpu and _CUPY_AVAILABLE)
+        self._feature_columns = list(model.feature_columns)
+        self._mu = np.asarray([model.train_mean.get(c, 0.0) for c in self._feature_columns], dtype=np.float64)
+        self._sd = np.asarray([model.train_std.get(c, 1.0) or 1.0 for c in self._feature_columns], dtype=np.float64)
+        if self.use_gpu:
+            self._centers_gpu = cp.asarray(model.centers, dtype=cp.float64)
+        else:
+            self._centers_gpu = None
 
     def predict(self, bar: OHLCVBar, features: Dict[str, Any], state: Dict[str, Any]) -> Optional[str]:
         if not features:
             self.last_probabilities = {}
             return None
         vec = []
-        for col in self.model.feature_columns:
+        for col in self._feature_columns:
             if col not in features:
                 self.last_probabilities = {}
                 return None
-            value = float(features[col])
-            mu = self.model.train_mean.get(col, 0.0)
-            sd = self.model.train_std.get(col, 1.0) or 1.0
-            vec.append((value - mu) / sd)
-        x = np.asarray(vec, dtype=np.float64)
-        d = np.sum((self.model.centers - x[None, :]) ** 2, axis=1)
+            vec.append(float(features[col]))
+        x = (np.asarray(vec, dtype=np.float64) - self._mu) / self._sd
+        if self.use_gpu and self._centers_gpu is not None:
+            x_gpu = cp.asarray(x, dtype=cp.float64)
+            d = cp.sum((self._centers_gpu - x_gpu[None, :]) ** 2, axis=1)
+            d = cp.asnumpy(d)
+        else:
+            d = np.sum((self.model.centers - x[None, :]) ** 2, axis=1)
         # Softmax over negative distances as pseudo-probabilities.
         scaled = -d
         scaled -= np.max(scaled)

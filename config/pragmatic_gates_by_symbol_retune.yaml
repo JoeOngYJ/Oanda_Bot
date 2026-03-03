@@ -1,0 +1,13 @@
+symbol_gates:
+  EUR_USD:
+    min_tested_years: 3
+    min_profitable_years: 1
+    min_profit_year_ratio: 0.33
+    min_median_expectancy_r: -0.00008
+    max_worst_year_dd: 0.05
+  USD_JPY:
+    min_tested_years: 3
+    min_profitable_years: 1
+    min_profit_year_ratio: 0.33
+    min_median_expectancy_r: -0.00010
+    max_worst_year_dd: 0.18

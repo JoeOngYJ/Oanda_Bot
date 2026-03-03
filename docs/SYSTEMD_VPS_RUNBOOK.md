@@ -11,6 +11,8 @@ This runbook covers:
 - `.env` filled with required values:
   - `OANDA_ACCOUNT_ID`, `OANDA_API_TOKEN`, `INFLUXDB_TOKEN`
   - `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`
+  - `DISCORD_EXEC_BOT_TOKEN` (optional fallback: `DISCORD_BOT_TOKEN`)
+  - `DISCORD_EXEC_CHANNEL_ID` (optional fallback: `DISCORD_CHANNEL_ID`, default `1477609642258337954`)
 - Runtime model JSON available under `data/research/`.
 
 ### Install Unit Files
@@ -32,6 +34,7 @@ Services installed:
 - `oanda-infra.service` (docker compose infra)
 - `oanda-trading-supervisor.service`
 - `oanda-discord-operator.service`
+- `oanda-discord-execution-notifier.service`
 
 If `oanda-infra.service` fails with port binding errors (for example `6379 already allocated`), keep infra service disabled and run infra manually or free the conflicting port/container first.
 
@@ -44,6 +47,7 @@ sudo loginctl enable-linger $USER
 ```bash
 journalctl --user -u oanda-trading-supervisor.service -f
 journalctl --user -u oanda-discord-operator.service -f
+journalctl --user -u oanda-discord-execution-notifier.service -f
 ```
 
 ## 2. VPS Deployment (Recommended for Live)

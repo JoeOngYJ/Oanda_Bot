@@ -257,6 +257,17 @@ class PipelineFns:
     make_labels: Callable[[pd.DataFrame, pd.Series, Dict[str, Any]], Any]
     walkforward_train_eval: Callable[[pd.DataFrame, pd.Series, Dict[str, Any], Dict[str, Any]], Any]
     backtest_from_signals: Callable[[pd.DataFrame, pd.DataFrame, Dict[str, Any]], Any]
+    select_and_transform_features: Optional[Callable[[pd.DataFrame, List[str]], Tuple[pd.DataFrame, Dict[str, Any]]]] = None
+    generate_purged_walkforward_splits: Optional[
+        Callable[[pd.Index, pd.Series, int, int, int], List[Tuple[np.ndarray, np.ndarray]]]
+    ] = None
+    fit_probability_calibrator: Optional[Callable[..., Any]] = None
+    apply_probability_calibrator: Optional[Callable[..., Any]] = None
+    compute_fold_diagnostics: Optional[Callable[..., Dict[str, Any]]] = None
+    compute_expected_value: Optional[Callable[[pd.Series, pd.Series, pd.Series, pd.Series], pd.Series]] = None
+    apply_trade_gating: Optional[
+        Callable[[pd.DataFrame, str, str, float, float, Optional[str]], pd.Series]
+    ] = None
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
@@ -303,6 +314,13 @@ def _load_pipeline(module_path: str) -> PipelineFns:
         make_labels=getattr(mod, "make_labels"),
         walkforward_train_eval=getattr(mod, "walkforward_train_eval"),
         backtest_from_signals=getattr(mod, "backtest_from_signals"),
+        select_and_transform_features=getattr(mod, "select_and_transform_features", None),
+        generate_purged_walkforward_splits=getattr(mod, "generate_purged_walkforward_splits", None),
+        fit_probability_calibrator=getattr(mod, "fit_probability_calibrator", None),
+        apply_probability_calibrator=getattr(mod, "apply_probability_calibrator", None),
+        compute_fold_diagnostics=getattr(mod, "compute_fold_diagnostics", None),
+        compute_expected_value=getattr(mod, "compute_expected_value", None),
+        apply_trade_gating=getattr(mod, "apply_trade_gating", None),
     )
 
 
@@ -836,6 +854,65 @@ def _extract_probability_series(metrics: Dict[str, Any], index: pd.DatetimeIndex
     return None
 
 
+def _estimate_label_end_ts(
+    y_index: pd.DatetimeIndex,
+    full_index: pd.DatetimeIndex,
+    horizon_bars: int,
+) -> pd.Series:
+    full = pd.DatetimeIndex(full_index)
+    pos = pd.Series(np.arange(len(full), dtype=int), index=full)
+    yp = pos.reindex(y_index).fillna(-1).astype(int)
+    hb = max(1, int(horizon_bars))
+    end_pos = np.clip(yp.to_numpy(dtype=int) + hb, 0, max(0, len(full) - 1))
+    end_ts = pd.Series(full[end_pos], index=y_index, dtype="datetime64[ns, UTC]")
+    return end_ts
+
+
+def _prepare_training_matrix(
+    X: pd.DataFrame,
+    y: pd.Series,
+    fns: PipelineFns,
+) -> Tuple[pd.DataFrame, pd.Series, Dict[str, Any]]:
+    Xi = X.copy()
+    yi = y.copy()
+    prep_meta: Dict[str, Any] = {}
+    if callable(fns.select_and_transform_features):
+        try:
+            Xi_t, stats = fns.select_and_transform_features(Xi, list(Xi.columns))
+            Xi = Xi_t
+            prep_meta["feature_transform_stats"] = stats
+        except Exception as exc:
+            prep_meta["feature_transform_error"] = str(exc)
+
+    for col in list(Xi.columns):
+        if not pd.api.types.is_numeric_dtype(Xi[col]):
+            codes, _ = pd.factorize(Xi[col], sort=True)
+            Xi[col] = pd.Series(codes, index=Xi.index, dtype=float)
+    Xi = Xi.replace([np.inf, -np.inf], np.nan).dropna(how="any")
+    yi = yi.reindex(Xi.index)
+    return Xi, yi, prep_meta
+
+
+def _build_custom_purged_splits(
+    X_index: pd.DatetimeIndex,
+    label_end_ts: pd.Series,
+    splits_cfg: Dict[str, Any],
+    fns: PipelineFns,
+) -> List[Tuple[np.ndarray, np.ndarray]]:
+    if not callable(fns.generate_purged_walkforward_splits):
+        return []
+    n_splits = int(splits_cfg.get("folds", 5))
+    n = len(X_index)
+    if n < 40:
+        return []
+    test_size = int(splits_cfg.get("test_size", max(10, n // max(4, n_splits + 1))))
+    embargo = int(splits_cfg.get("embargo_bars", max(1, test_size // 10)))
+    try:
+        return fns.generate_purged_walkforward_splits(X_index, label_end_ts.reindex(X_index), n_splits, test_size, embargo)
+    except Exception:
+        return []
+
+
 def _to_dataframe(obj: Any) -> pd.DataFrame:
     if isinstance(obj, pd.DataFrame):
         return obj.copy()
@@ -1283,6 +1360,7 @@ def _apply_pair_filters(signals: pd.DataFrame, base_df: pd.DataFrame, symbol: st
     style = STRATEGY_STYLE[strategy]
     pref_styles = set(prefs.get("preferred_styles", []))
     pref_sessions = set(prefs.get("preferred_sessions", []))
+    disable_session_filters = bool(cfg.get("disable_session_filters", False) or prefs.get("disable_session_filters", False))
 
     out = signals.copy()
     if pref_styles and style not in pref_styles:
@@ -1291,7 +1369,7 @@ def _apply_pair_filters(signals: pd.DataFrame, base_df: pd.DataFrame, symbol: st
         if col:
             out = out[pd.to_numeric(out[col], errors="coerce").fillna(0.0) > 0]
 
-    if pref_sessions:
+    if pref_sessions and not disable_session_filters:
         mask = pd.Series(False, index=out.index)
         for s in pref_sessions:
             col = f"sess_{s}"
@@ -1308,7 +1386,7 @@ def _apply_pair_filters(signals: pd.DataFrame, base_df: pd.DataFrame, symbol: st
     quality = prefs.get("signal_quality", {})
     if isinstance(quality, dict) and len(quality) > 0 and not out.empty:
         allowed_sessions = set(quality.get("allowed_sessions", []))
-        if allowed_sessions:
+        if allowed_sessions and not disable_session_filters:
             qmask = pd.Series(False, index=out.index)
             for s in allowed_sessions:
                 col = f"sess_{s}"
@@ -1475,6 +1553,16 @@ def _save_model_artifact(model_obj: Any, meta: Dict[str, Any], out_dir: Path, ba
     }
 
 
+def _save_trade_log_artifact(trade_log: Any, out_dir: Path, base_name: str) -> str:
+    df = _to_dataframe(trade_log)
+    if df.empty:
+        return ""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    p = out_dir / f"{base_name}.trades.csv"
+    df.to_csv(p, index=False)
+    return str(p)
+
+
 def _prepare_atr_series(df_ltf: pd.DataFrame, ltf_features: pd.DataFrame) -> pd.Series:
     for col in ["atr", "atr14", "m15_atr_pct", "h1_atr_pct"]:
         if col in ltf_features.columns:
@@ -1526,6 +1614,9 @@ def _ranking_headers() -> List[str]:
         "short_win_rate",
         "brier_score",
         "ece",
+        "calibrator_type",
+        "fold_diagnostics_json",
+        "feature_transform_stats_json",
         "calibrated_no_trade_threshold",
         "session_breakdown_json",
         "regime_breakdown_json",
@@ -1536,6 +1627,7 @@ def _ranking_headers() -> List[str]:
         "model_selected",
         "artifact_model_path",
         "artifact_meta_path",
+        "artifact_trade_log_path",
     ]
 
 
@@ -1683,24 +1775,70 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                         ]
                         feature_cols = list(dict.fromkeys(feature_cols))
 
-                        X = merged.loc[sig_idx, feature_cols].copy()
+                        X_raw = merged.loc[sig_idx, feature_cols].copy()
                         y_sig = y.loc[sig_idx].copy()
-
-                        for col in list(X.columns):
-                            if not pd.api.types.is_numeric_dtype(X[col]):
-                                codes, _ = pd.factorize(X[col], sort=True)
-                                X[col] = pd.Series(codes, index=X.index, dtype=float)
-
-                        X = X.replace([np.inf, -np.inf], np.nan).dropna(how="any")
-                        y_sig = y_sig.reindex(X.index)
+                        X, y_sig, prep_meta = _prepare_training_matrix(X_raw, y_sig, fns)
                         if len(X) < 20:
                             continue
 
-                        wf_raw = fns.walkforward_train_eval(X, y_sig, sym_cfg.get("model", {}), sym_cfg.get("splits", {}))
+                        horizon = int(sym_cfg.get("barrier", {}).get("horizon_bars", 8))
+                        label_end_ts = _estimate_label_end_ts(pd.DatetimeIndex(X.index), pd.DatetimeIndex(df_ltf.index), horizon)
+                        splits_cfg_local = dict(sym_cfg.get("splits", {}))
+                        custom_splits = _build_custom_purged_splits(pd.DatetimeIndex(X.index), label_end_ts, splits_cfg_local, fns)
+                        if custom_splits:
+                            splits_cfg_local["custom_splits"] = [(tr.tolist(), te.tolist()) for tr, te in custom_splits]
+
+                        wf_raw = fns.walkforward_train_eval(X, y_sig, sym_cfg.get("model", {}), splits_cfg_local)
                         wf_metrics, wf_models = _extract_wf_output(wf_raw)
                         probs = _extract_probability_series(wf_metrics, X.index)
+                        fold_diagnostics: List[Dict[str, Any]] = []
+                        if probs is not None and callable(fns.compute_fold_diagnostics) and custom_splits:
+                            exp_cost = pd.to_numeric(merged.get("expected_cost_proxy_bps", pd.Series(index=X.index, data=0.0)), errors="coerce")
+                            exp_cost = exp_cost.reindex(X.index).fillna(0.0) / 10000.0
+                            for fid, (_, te) in enumerate(custom_splits, start=1):
+                                tei = np.asarray(te, dtype=int)
+                                if len(tei) == 0:
+                                    continue
+                                y_te = y_sig.iloc[tei]
+                                p_te = probs.iloc[tei]
+                                cinfo = {
+                                    "expected_cost": exp_cost.iloc[tei],
+                                    "threshold": float(sym_cfg.get("no_trade", {}).get("probability_threshold", 0.58)),
+                                }
+                                try:
+                                    fd = fns.compute_fold_diagnostics(y_te, p_te, cinfo, fid)
+                                    if isinstance(fd, dict):
+                                        fold_diagnostics.append(fd)
+                                except Exception:
+                                    pass
+
+                        calibrator = None
+                        probs_cal = probs
+                        calibrator_type = ""
+                        if probs is not None and callable(fns.fit_probability_calibrator) and callable(fns.apply_probability_calibrator):
+                            try:
+                                reg_conf = pd.to_numeric(merged.get("regime_confidence", pd.Series(index=X.index, data=np.nan)), errors="coerce")
+                                reg_bucket = (reg_conf.reindex(X.index).fillna(0.0) >= float(exp_cfg.get("calibration_regime_conf_cut", 0.58))).astype(int)
+                                calibrator = fns.fit_probability_calibrator(
+                                    probs.to_numpy(dtype=float),
+                                    (pd.to_numeric(y_sig, errors="coerce").fillna(0.0) > 0).astype(int).to_numpy(),
+                                    regime_bucket=reg_bucket.to_numpy(),
+                                    isotonic_min_samples=int(exp_cfg.get("isotonic_min_samples", 1000)),
+                                    bucket_min_samples=int(exp_cfg.get("calibration_bucket_min_samples", 300)),
+                                )
+                                probs_cal_arr = fns.apply_probability_calibrator(
+                                    calibrator,
+                                    probs.to_numpy(dtype=float),
+                                    regime_bucket=reg_bucket.to_numpy(),
+                                )
+                                probs_cal = pd.Series(np.asarray(probs_cal_arr, dtype=float), index=probs.index)
+                                if isinstance(calibrator, dict):
+                                    calibrator_type = str(calibrator.get("type", ""))
+                            except Exception:
+                                probs_cal = probs
+
                         calib = _compute_brier_ece(
-                            probs,
+                            probs_cal,
                             y_sig,
                             bins=int(sym_cfg.get("no_trade", {}).get("ece_bins", 10)),
                         )
@@ -1726,7 +1864,47 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                         for th in threshold_grid:
                             cfg_nt = dict(no_trade_cfg)
                             cfg_nt["probability_threshold"] = float(th)
-                            backtest_signals = _build_signals_for_backtest(sig.loc[X.index], probs, cfg_nt)
+                            backtest_signals = _build_signals_for_backtest(sig.loc[X.index], probs_cal, cfg_nt)
+                            # Calibration fallback: if calibrated probabilities collapse and filter out
+                            # all candidates, retry with raw probabilities to avoid false-empty runs.
+                            if backtest_signals.empty and (probs is not None) and (probs_cal is not None):
+                                if not probs.equals(probs_cal):
+                                    backtest_signals = _build_signals_for_backtest(sig.loc[X.index], probs, cfg_nt)
+                            if (
+                                (not backtest_signals.empty)
+                                and callable(fns.compute_expected_value)
+                                and callable(fns.apply_trade_gating)
+                            ):
+                                prob_s = pd.to_numeric(backtest_signals.get("model_probability", pd.Series(index=backtest_signals.index, data=np.nan)), errors="coerce").fillna(0.0)
+                                gw = pd.Series(float(sym_cfg.get("barrier", {}).get("up_atr_mult", 1.0)), index=backtest_signals.index, dtype=float)
+                                gl = pd.Series(float(sym_cfg.get("barrier", {}).get("down_atr_mult", 1.0)), index=backtest_signals.index, dtype=float)
+                                ec = (
+                                    pd.to_numeric(merged.get("expected_cost_proxy_bps", pd.Series(index=backtest_signals.index, data=0.0)), errors="coerce")
+                                    .reindex(backtest_signals.index)
+                                    .fillna(0.0)
+                                    / 10000.0
+                                )
+                                ev = fns.compute_expected_value(prob_s, gw, gl, ec)
+                                gate_df = pd.DataFrame(index=backtest_signals.index)
+                                gate_df["p"] = prob_s
+                                gate_df["ev"] = ev
+                                spread_shock = (
+                                    pd.to_numeric(merged.get("spread_proxy_bps", pd.Series(index=backtest_signals.index, data=0.0)), errors="coerce")
+                                    .reindex(backtest_signals.index)
+                                    .fillna(0.0)
+                                )
+                                shock_thr = float(spread_shock.quantile(0.8)) if len(spread_shock) else 0.0
+                                dyn_thr = float(th) + float(exp_cfg.get("spread_shock_threshold_bump", 0.03)) * (spread_shock > shock_thr).astype(float)
+                                gate_df["dynamic_threshold"] = dyn_thr
+                                gate = fns.apply_trade_gating(
+                                    gate_df,
+                                    p_col="p",
+                                    ev_col="ev",
+                                    min_ev=float(exp_cfg.get("min_ev", 0.0)),
+                                    base_p_threshold=float(th),
+                                    dynamic_threshold_col="dynamic_threshold",
+                                )
+                                backtest_signals = backtest_signals[gate.reindex(backtest_signals.index).fillna(0).astype(int) > 0]
                             if backtest_signals.empty:
                                 continue
                             bt_raw = fns.backtest_from_signals(df_ltf, backtest_signals, sym_cfg.get("cost", {}))
@@ -1859,6 +2037,11 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                             "ece": round(float(calib.get("ece", float("nan"))), 6)
                             if pd.notna(calib.get("ece", np.nan))
                             else np.nan,
+                            "calibrator_type": calibrator_type,
+                            "fold_diagnostics_json": json.dumps(_safe_jsonable(fold_diagnostics), separators=(",", ":")),
+                            "feature_transform_stats_json": json.dumps(
+                                _safe_jsonable(prep_meta.get("feature_transform_stats", {})), separators=(",", ":")
+                            ),
                             "calibrated_no_trade_threshold": float(best_run["threshold"]),
                             "session_breakdown_json": json.dumps(_safe_jsonable(sess_break), separators=(",", ":")),
                             "regime_breakdown_json": json.dumps(_safe_jsonable(regime_break), separators=(",", ":")),
@@ -1869,6 +2052,7 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                             "model_selected": False,
                             "artifact_model_path": "",
                             "artifact_meta_path": "",
+                            "artifact_trade_log_path": "",
                         }
                         rows.append(row)
 
@@ -1877,12 +2061,14 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                                 "row": row,
                                 "models": wf_models,
                                 "wf_metrics": wf_metrics,
-                                "feature_cols": feature_cols,
+                                "feature_cols": list(X.columns),
                                 "label_meta": label_meta,
                                 "regime_variant": variant,
                                 "sym_cfg": sym_cfg,
+                                "calibrator": calibrator,
                                 "session_filter": _pair_prefs(symbol, sym_cfg).get("preferred_sessions", []),
                                 "ltf_timeframe": str(ltf_tf),
+                                "trade_log": best_run.get("trade_log"),
                             }
                         )
                         strategy_eval_records.append(
@@ -1941,27 +2127,80 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                                     for c in hybrid_sig.columns
                                     if c.startswith("sig_") or c in {"direction", "router_regime", "router_strategy", "sig_strategy"}
                                 ]
-                                X = merged.loc[sig_idx, feature_cols].copy().join(hybrid_sig.loc[sig_idx, sig_extra_cols], how="left")
+                                X_raw = merged.loc[sig_idx, feature_cols].copy().join(hybrid_sig.loc[sig_idx, sig_extra_cols], how="left")
                                 y_sig = y.loc[sig_idx].copy()
                                 for c in sig_extra_cols:
                                     if c.startswith("sig_") or c == "direction":
-                                        X[c] = pd.to_numeric(X[c], errors="coerce").fillna(0.0)
+                                        X_raw[c] = pd.to_numeric(X_raw[c], errors="coerce").fillna(0.0)
 
-                                for col in list(X.columns):
-                                    if not pd.api.types.is_numeric_dtype(X[col]):
-                                        codes, _ = pd.factorize(X[col], sort=True)
-                                        X[col] = pd.Series(codes, index=X.index, dtype=float)
-
-                                X = X.replace([np.inf, -np.inf], np.nan).dropna(how="any")
-                                y_sig = y_sig.reindex(X.index)
+                                X, y_sig, prep_meta = _prepare_training_matrix(X_raw, y_sig, fns)
                                 if len(X) >= 20:
+                                    horizon = int(sym_cfg.get("barrier", {}).get("horizon_bars", 8))
+                                    label_end_ts = _estimate_label_end_ts(pd.DatetimeIndex(X.index), pd.DatetimeIndex(df_ltf.index), horizon)
+                                    splits_cfg_local = dict(sym_cfg.get("splits", {}))
+                                    custom_splits = _build_custom_purged_splits(pd.DatetimeIndex(X.index), label_end_ts, splits_cfg_local, fns)
+                                    if custom_splits:
+                                        splits_cfg_local["custom_splits"] = [(tr.tolist(), te.tolist()) for tr, te in custom_splits]
+
                                     wf_raw = fns.walkforward_train_eval(
-                                        X, y_sig, sym_cfg.get("model", {}), sym_cfg.get("splits", {})
+                                        X, y_sig, sym_cfg.get("model", {}), splits_cfg_local
                                     )
                                     wf_metrics, wf_models = _extract_wf_output(wf_raw)
                                     probs = _extract_probability_series(wf_metrics, X.index)
+                                    fold_diagnostics: List[Dict[str, Any]] = []
+                                    if probs is not None and callable(fns.compute_fold_diagnostics) and custom_splits:
+                                        exp_cost = pd.to_numeric(
+                                            merged.get("expected_cost_proxy_bps", pd.Series(index=X.index, data=0.0)),
+                                            errors="coerce",
+                                        )
+                                        exp_cost = exp_cost.reindex(X.index).fillna(0.0) / 10000.0
+                                        for fid, (_, te) in enumerate(custom_splits, start=1):
+                                            tei = np.asarray(te, dtype=int)
+                                            if len(tei) == 0:
+                                                continue
+                                            cinfo = {
+                                                "expected_cost": exp_cost.iloc[tei],
+                                                "threshold": float(sym_cfg.get("no_trade", {}).get("probability_threshold", 0.58)),
+                                            }
+                                            try:
+                                                fd = fns.compute_fold_diagnostics(y_sig.iloc[tei], probs.iloc[tei], cinfo, fid)
+                                                if isinstance(fd, dict):
+                                                    fold_diagnostics.append(fd)
+                                            except Exception:
+                                                pass
+
+                                    calibrator = None
+                                    probs_cal = probs
+                                    calibrator_type = ""
+                                    if probs is not None and callable(fns.fit_probability_calibrator) and callable(fns.apply_probability_calibrator):
+                                        try:
+                                            reg_conf = pd.to_numeric(
+                                                merged.get("regime_confidence", pd.Series(index=X.index, data=np.nan)),
+                                                errors="coerce",
+                                            )
+                                            reg_bucket = (
+                                                reg_conf.reindex(X.index).fillna(0.0)
+                                                >= float(exp_cfg.get("calibration_regime_conf_cut", 0.58))
+                                            ).astype(int)
+                                            calibrator = fns.fit_probability_calibrator(
+                                                probs.to_numpy(dtype=float),
+                                                (pd.to_numeric(y_sig, errors="coerce").fillna(0.0) > 0).astype(int).to_numpy(),
+                                                regime_bucket=reg_bucket.to_numpy(),
+                                                isotonic_min_samples=int(exp_cfg.get("isotonic_min_samples", 1000)),
+                                                bucket_min_samples=int(exp_cfg.get("calibration_bucket_min_samples", 300)),
+                                            )
+                                            probs_cal_arr = fns.apply_probability_calibrator(
+                                                calibrator,
+                                                probs.to_numpy(dtype=float),
+                                                regime_bucket=reg_bucket.to_numpy(),
+                                            )
+                                            probs_cal = pd.Series(np.asarray(probs_cal_arr, dtype=float), index=probs.index)
+                                            if isinstance(calibrator, dict):
+                                                calibrator_type = str(calibrator.get("type", ""))
+                                        except Exception:
+                                            probs_cal = probs
                                     calib = _compute_brier_ece(
-                                        probs,
+                                        probs_cal,
                                         y_sig,
                                         bins=int(sym_cfg.get("no_trade", {}).get("ece_bins", 10)),
                                     )
@@ -1988,7 +2227,59 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                                     for th in threshold_grid:
                                         cfg_nt = dict(no_trade_cfg)
                                         cfg_nt["probability_threshold"] = float(th)
-                                        backtest_signals = _build_signals_for_backtest(hybrid_sig.loc[X.index], probs, cfg_nt)
+                                        backtest_signals = _build_signals_for_backtest(hybrid_sig.loc[X.index], probs_cal, cfg_nt)
+                                        # Calibration fallback for hybrid router as well.
+                                        if backtest_signals.empty and (probs is not None) and (probs_cal is not None):
+                                            if not probs.equals(probs_cal):
+                                                backtest_signals = _build_signals_for_backtest(hybrid_sig.loc[X.index], probs, cfg_nt)
+                                        if (
+                                            (not backtest_signals.empty)
+                                            and callable(fns.compute_expected_value)
+                                            and callable(fns.apply_trade_gating)
+                                        ):
+                                            prob_s = pd.to_numeric(
+                                                backtest_signals.get("model_probability", pd.Series(index=backtest_signals.index, data=np.nan)),
+                                                errors="coerce",
+                                            ).fillna(0.0)
+                                            gw = pd.Series(float(sym_cfg.get("barrier", {}).get("up_atr_mult", 1.0)), index=backtest_signals.index, dtype=float)
+                                            gl = pd.Series(float(sym_cfg.get("barrier", {}).get("down_atr_mult", 1.0)), index=backtest_signals.index, dtype=float)
+                                            ec = (
+                                                pd.to_numeric(
+                                                    merged.get("expected_cost_proxy_bps", pd.Series(index=backtest_signals.index, data=0.0)),
+                                                    errors="coerce",
+                                                )
+                                                .reindex(backtest_signals.index)
+                                                .fillna(0.0)
+                                                / 10000.0
+                                            )
+                                            ev = fns.compute_expected_value(prob_s, gw, gl, ec)
+                                            gate_df = pd.DataFrame(index=backtest_signals.index)
+                                            gate_df["p"] = prob_s
+                                            gate_df["ev"] = ev
+                                            spread_shock = (
+                                                pd.to_numeric(
+                                                    merged.get("spread_proxy_bps", pd.Series(index=backtest_signals.index, data=0.0)),
+                                                    errors="coerce",
+                                                )
+                                                .reindex(backtest_signals.index)
+                                                .fillna(0.0)
+                                            )
+                                            shock_thr = float(spread_shock.quantile(0.8)) if len(spread_shock) else 0.0
+                                            dyn_thr = float(th) + float(exp_cfg.get("spread_shock_threshold_bump", 0.03)) * (
+                                                spread_shock > shock_thr
+                                            ).astype(float)
+                                            gate_df["dynamic_threshold"] = dyn_thr
+                                            gate = fns.apply_trade_gating(
+                                                gate_df,
+                                                p_col="p",
+                                                ev_col="ev",
+                                                min_ev=float(exp_cfg.get("min_ev", 0.0)),
+                                                base_p_threshold=float(th),
+                                                dynamic_threshold_col="dynamic_threshold",
+                                            )
+                                            backtest_signals = backtest_signals[
+                                                gate.reindex(backtest_signals.index).fillna(0).astype(int) > 0
+                                            ]
                                         if backtest_signals.empty:
                                             continue
                                         bt_raw = fns.backtest_from_signals(df_ltf, backtest_signals, sym_cfg.get("cost", {}))
@@ -2122,6 +2413,11 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                                             "ece": round(float(calib.get("ece", float("nan"))), 6)
                                             if pd.notna(calib.get("ece", np.nan))
                                             else np.nan,
+                                            "calibrator_type": calibrator_type,
+                                            "fold_diagnostics_json": json.dumps(_safe_jsonable(fold_diagnostics), separators=(",", ":")),
+                                            "feature_transform_stats_json": json.dumps(
+                                                _safe_jsonable(prep_meta.get("feature_transform_stats", {})), separators=(",", ":")
+                                            ),
                                             "calibrated_no_trade_threshold": float(best_run["threshold"]),
                                             "session_breakdown_json": json.dumps(_safe_jsonable(sess_break), separators=(",", ":")),
                                             "regime_breakdown_json": json.dumps(_safe_jsonable(regime_break), separators=(",", ":")),
@@ -2134,6 +2430,7 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                                             "model_selected": False,
                                             "artifact_model_path": "",
                                             "artifact_meta_path": "",
+                                            "artifact_trade_log_path": "",
                                         }
                                         rows.append(row)
                                         model_candidates.append(
@@ -2141,13 +2438,15 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
                                                 "row": row,
                                                 "models": wf_models,
                                                 "wf_metrics": wf_metrics,
-                                                "feature_cols": list(dict.fromkeys(feature_cols + sig_extra_cols)),
+                                                "feature_cols": list(X.columns),
                                                 "label_meta": label_meta,
                                                 "regime_variant": variant,
                                                 "sym_cfg": sym_cfg,
                                                 "session_filter": _pair_prefs(symbol, sym_cfg).get("preferred_sessions", []),
                                                 "ltf_timeframe": str(ltf_tf),
                                                 "regime_strategy_map": regime_map,
+                                                "calibrator": calibrator,
+                                                "trade_log": best_run.get("trade_log"),
                                             }
                                         )
 
@@ -2210,6 +2509,7 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
             rank_df.loc[chall_idx, "deployment_role"] = "challenger"
 
     model_dir = Path(out_cfg.get("model_dir", "models/research/regime_strategy"))
+    save_trade_logs = bool(out_cfg.get("save_selected_trade_logs", True))
 
     for cand in model_candidates:
         r = cand["row"]
@@ -2252,9 +2552,20 @@ def run_research(cfg: Dict[str, Any], fns: Optional[PipelineFns], template_only:
             "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         }
         artifacts = _save_model_artifact(cand["models"], meta, model_dir / r["symbol"], base_name)
+        trade_log_path = ""
+        if save_trade_logs:
+            trade_log_path = _save_trade_log_artifact(cand.get("trade_log"), model_dir / r["symbol"], base_name)
+            if trade_log_path:
+                meta["trade_log_path"] = trade_log_path
+                try:
+                    with Path(artifacts.get("meta_path", "")).open("w", encoding="utf-8") as f:
+                        json.dump(_safe_jsonable(meta), f, indent=2)
+                except Exception:
+                    pass
         rank_df.loc[idx, "model_selected"] = True
         rank_df.loc[idx, "artifact_model_path"] = artifacts.get("model_path", "")
         rank_df.loc[idx, "artifact_meta_path"] = artifacts.get("meta_path", "")
+        rank_df.loc[idx, "artifact_trade_log_path"] = trade_log_path
 
     rank_df.to_csv(ranking_csv, index=False)
 
