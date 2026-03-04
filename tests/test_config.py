@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from pydantic import ValidationError
 
-from shared.config import Config
+from oanda_bot.utils.config import Config
 
 
 class TestConfig:

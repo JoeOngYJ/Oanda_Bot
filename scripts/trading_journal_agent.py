@@ -13,9 +13,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Dict
 
-from shared.config import Config
-from shared.message_bus import MessageBus
-from shared.models import Execution
+from oanda_bot.utils.config import Config
+from oanda_bot.utils.message_bus import MessageBus
+from oanda_bot.utils.models import Execution
 
 
 def parse_args() -> argparse.Namespace:

@@ -14,8 +14,8 @@ import aiohttp
 from oandapyV20 import API
 from oandapyV20.endpoints.accounts import AccountSummary
 
-from shared.config import Config
-from shared.message_bus import MessageBus
+from oanda_bot.utils.config import Config
+from oanda_bot.utils.message_bus import MessageBus
 
 
 def parse_args() -> argparse.Namespace:

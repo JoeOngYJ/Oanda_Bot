@@ -25,4 +25,4 @@ else
   PY_BIN="python3"
 fi
 
-"$PY_BIN" -m oanda_trading_system.cli "$@"
+"$PY_BIN" -m oanda_bot.cli "$@"

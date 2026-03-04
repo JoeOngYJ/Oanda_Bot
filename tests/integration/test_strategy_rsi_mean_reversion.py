@@ -1,8 +1,8 @@
 from decimal import Decimal
 from datetime import datetime, timezone
 
-from agents.strategy.models.rsi_mean_reversion import RSIMeanReversion
-from shared.models import MarketTick, Instrument
+from oanda_bot.agents.strategy.models.rsi_mean_reversion import RSIMeanReversion
+from oanda_bot.utils.models import MarketTick, Instrument
 
 
 def main():
@@ -55,7 +55,7 @@ def main():
             # Print debug RSI when available
             prices_list = list(strategy.price_history[Instrument.GBP_USD])
             if len(prices_list) >= config["parameters"]["rsi_period"] + 1:
-                from agents.strategy.indicators import rsi
+                from oanda_bot.agents.strategy.indicators import rsi
                 current_rsi = rsi(prices_list, config["parameters"]["rsi_period"])
                 if current_rsi is not None:
                     print(f"RSI debug: {current_rsi:.2f} at price {price}")

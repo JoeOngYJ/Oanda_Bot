@@ -19,7 +19,7 @@ if [ -z "$MODEL_JSON" ]; then
   exit 1
 fi
 
-./.venv/bin/python -m agents.strategy.regime_runtime_agent \
+PYTHONPATH=src ./.venv/bin/python -m oanda_bot.agents.strategy.regime_runtime_agent \
   --model-json "$MODEL_JSON" \
   --instrument "${INSTRUMENT:-XAU_USD}" \
   --decision-mode "${DECISION_MODE:-ensemble}" \

@@ -6,9 +6,9 @@ import pytest
 from decimal import Decimal
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
-from shared.config import Config, RiskLimitsConfig, PerInstrumentLimits, CircuitBreakerConfig
-from shared.models import TradeSignal, Instrument, Side
-from agents.risk.agent import RiskAgent
+from oanda_bot.utils.config import Config, RiskLimitsConfig, PerInstrumentLimits, CircuitBreakerConfig
+from oanda_bot.utils.models import TradeSignal, Instrument, Side
+from oanda_bot.agents.risk.agent import RiskAgent
 
 
 @pytest.fixture

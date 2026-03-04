@@ -1,3 +1,0 @@
-instrument,tf,oos_start,oos_end,trades,final_equity,net_pnl,win_rate_pct,sharpe,max_drawdown_pct,fees,financing,status,model_json
-XAU_USD,H1,2026-01-01,2026-02-28,49,10039.35,39.35,48.98,0.1252,2.26,0.02,4.78,REJECT,data/research/multiframe_regime_model_20260228_153220.json
-XAU_USD,M15,2026-01-01,2026-02-28,193,10446.68,446.68,52.85,0.7223,6.77,0.08,72.67,PASS,data/research/multiframe_regime_model_20260228_153220.json

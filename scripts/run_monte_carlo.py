@@ -1,5 +1,5 @@
 """Run Monte Carlo simulations on results (skeleton)."""
-from backtesting.analysis.monte_carlo import run_monte_carlo
+from oanda_bot.backtesting.analysis.monte_carlo import run_monte_carlo
 
 
 def main():

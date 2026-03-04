@@ -1,17 +1,17 @@
 from decimal import Decimal
 from datetime import datetime, timezone
 
-from backtesting.data.models import OHLCVBar
-from backtesting.execution.simulator import ExecutionSimulator
-from backtesting.execution.slippage import SlippageModel
-from backtesting.execution.commission import (
+from oanda_bot.backtesting.data.models import OHLCVBar
+from oanda_bot.backtesting.execution.simulator import ExecutionSimulator
+from oanda_bot.backtesting.execution.slippage import SlippageModel
+from oanda_bot.backtesting.execution.commission import (
     OandaCoreCommissionModel,
     OandaSpreadOnlyCommissionModel,
 )
-from backtesting.core.timeframe import Timeframe
-from backtesting.core.types import InstrumentSymbol
-from backtesting.strategy.signal import Signal
-from backtesting.strategy.signal import SignalDirection
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.core.types import InstrumentSymbol
+from oanda_bot.backtesting.strategy.signal import Signal
+from oanda_bot.backtesting.strategy.signal import SignalDirection
 
 
 def test_spread_applied_to_long_price():

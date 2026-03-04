@@ -16,8 +16,8 @@ import pandas as pd
 
 import scripts.pipeline_compat_adapter as adapter
 import scripts.regime_strategy_research as rs
-from backtesting.core.timeframe import Timeframe
-from backtesting.data.downloader import OandaDownloader
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.downloader import OandaDownloader
 from scripts.promote_and_validate_selected_models import (
     PROJECT_ROOT,
     _build_hybrid_signals,

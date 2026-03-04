@@ -6,8 +6,8 @@ import pytest
 import psutil
 import time
 
-from shared.message_bus import MessageBus
-from shared.config import Config
+from oanda_bot.utils.message_bus import MessageBus
+from oanda_bot.utils.config import Config
 
 
 @pytest.mark.asyncio

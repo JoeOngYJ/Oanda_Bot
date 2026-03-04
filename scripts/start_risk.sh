@@ -11,4 +11,4 @@ echo "  - Enforce risk limits"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
-python -m agents.risk.agent
+PYTHONPATH=src python -m oanda_bot.agents.risk.agent

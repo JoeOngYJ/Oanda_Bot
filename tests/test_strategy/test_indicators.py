@@ -3,7 +3,7 @@ Unit tests for technical indicators.
 """
 
 import pytest
-from agents.strategy.indicators import sma, ema, rsi
+from oanda_bot.agents.strategy.indicators import sma, ema, rsi
 
 
 class TestSMA:

@@ -5,7 +5,7 @@ Unit tests for alert manager.
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, AsyncMock
-from agents.monitoring.alerting import AlertManager
+from oanda_bot.agents.monitoring.alerting import AlertManager
 
 
 @pytest.fixture

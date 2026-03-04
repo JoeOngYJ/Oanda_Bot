@@ -6,9 +6,9 @@ from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
 from decimal import Decimal
 
-from agents.execution.oanda_executor import OandaExecutor
-from shared.models import Order, OrderStatus, OrderType, Side, Instrument
-from shared.config import Config
+from oanda_bot.agents.execution.oanda_executor import OandaExecutor
+from oanda_bot.utils.models import Order, OrderStatus, OrderType, Side, Instrument
+from oanda_bot.utils.config import Config
 
 
 @pytest.fixture

@@ -1,4 +1,4 @@
-from agents.strategy.indicators import sma, rsi
+from oanda_bot.agents.strategy.indicators import sma, rsi
 
 
 def test_sma():

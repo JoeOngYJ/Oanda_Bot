@@ -5,7 +5,7 @@ Unit tests for health checker.
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
-from agents.monitoring.health_checker import HealthChecker
+from oanda_bot.agents.monitoring.health_checker import HealthChecker
 
 
 @pytest.fixture

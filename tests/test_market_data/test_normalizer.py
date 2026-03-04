@@ -5,8 +5,8 @@ Unit tests for data normalizer.
 import pytest
 from datetime import datetime
 from decimal import Decimal
-from agents.market_data.data_normalizer import DataNormalizer
-from shared.models import Instrument
+from oanda_bot.agents.market_data.data_normalizer import DataNormalizer
+from oanda_bot.utils.models import Instrument
 
 
 class TestDataNormalizer:

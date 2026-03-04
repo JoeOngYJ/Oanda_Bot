@@ -3,15 +3,15 @@ from decimal import Decimal
 
 import pandas as pd
 
-from backtesting.core.backtester import Backtester, FeatureEngineer, RegimePredictor, RiskManager
-from backtesting.core.timeframe import Timeframe
-from backtesting.core.types import InstrumentSymbol
-from backtesting.data.models import OHLCVBar
-from backtesting.execution.commission import OandaSpreadOnlyCommissionModel
-from backtesting.execution.simulator import ExecutionSimulator
-from backtesting.execution.slippage import SlippageModel
-from backtesting.strategy.base import StrategyBase
-from backtesting.strategy.signal import Signal, SignalDirection
+from oanda_bot.backtesting.core.backtester import Backtester, FeatureEngineer, RegimePredictor, RiskManager
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.core.types import InstrumentSymbol
+from oanda_bot.backtesting.data.models import OHLCVBar
+from oanda_bot.backtesting.execution.commission import OandaSpreadOnlyCommissionModel
+from oanda_bot.backtesting.execution.simulator import ExecutionSimulator
+from oanda_bot.backtesting.execution.slippage import SlippageModel
+from oanda_bot.backtesting.strategy.base import StrategyBase
+from oanda_bot.backtesting.strategy.signal import Signal, SignalDirection
 
 
 class CountingFeatureEngineer(FeatureEngineer):

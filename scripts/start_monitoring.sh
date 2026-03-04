@@ -11,4 +11,4 @@ echo "  - Expose Prometheus metrics on :8000"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
-python -m agents.monitoring.agent
+PYTHONPATH=src python -m oanda_bot.agents.monitoring.agent

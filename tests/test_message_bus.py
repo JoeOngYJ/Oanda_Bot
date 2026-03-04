@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from shared.message_bus import MessageBus
+from oanda_bot.utils.message_bus import MessageBus
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ class TestMessageBus:
     @pytest.mark.asyncio
     async def test_connect(self, mock_config, mock_redis):
         """Test connecting to Redis"""
-        with patch('shared.message_bus.redis.Redis', return_value=mock_redis):
+        with patch('oanda_bot.utils.message_bus.redis.Redis', return_value=mock_redis):
             bus = MessageBus(mock_config)
             await bus.connect()
 
@@ -60,7 +60,7 @@ class TestMessageBus:
     @pytest.mark.asyncio
     async def test_disconnect(self, mock_config, mock_redis):
         """Test disconnecting from Redis"""
-        with patch('shared.message_bus.redis.Redis', return_value=mock_redis):
+        with patch('oanda_bot.utils.message_bus.redis.Redis', return_value=mock_redis):
             bus = MessageBus(mock_config)
             await bus.connect()
             await bus.disconnect()
@@ -70,7 +70,7 @@ class TestMessageBus:
     @pytest.mark.asyncio
     async def test_publish_message(self, mock_config, mock_redis):
         """Test publishing a message"""
-        with patch('shared.message_bus.redis.Redis', return_value=mock_redis):
+        with patch('oanda_bot.utils.message_bus.redis.Redis', return_value=mock_redis):
             bus = MessageBus(mock_config)
             await bus.connect()
 
@@ -83,7 +83,7 @@ class TestMessageBus:
     @pytest.mark.asyncio
     async def test_publish_adds_timestamp(self, mock_config, mock_redis):
         """Test that publish adds timestamp if not present"""
-        with patch('shared.message_bus.redis.Redis', return_value=mock_redis):
+        with patch('oanda_bot.utils.message_bus.redis.Redis', return_value=mock_redis):
             bus = MessageBus(mock_config)
             await bus.connect()
 
@@ -144,7 +144,7 @@ class TestMessageBus:
         }
         mock_redis.xinfo_groups.return_value = [{'lag': 5}]
 
-        with patch('shared.message_bus.redis.Redis', return_value=mock_redis):
+        with patch('oanda_bot.utils.message_bus.redis.Redis', return_value=mock_redis):
             bus = MessageBus(mock_config)
             await bus.connect()
 

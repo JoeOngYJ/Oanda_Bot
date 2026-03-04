@@ -33,20 +33,20 @@ deps:
 phase2: phase2-oanda phase2-influx phase2-influx-query phase2-tests
 
 phase2-oanda:
-	PYTHONPATH=. python tests/integration/test_oanda_connection.py
+	PYTHONPATH=src python tests/integration/test_oanda_connection.py
 
 phase2-influx:
-	PYTHONPATH=. python tests/integration/test_influx_write.py
+	PYTHONPATH=src python tests/integration/test_influx_write.py
 
 phase2-influx-query:
-	PYTHONPATH=. python tests/integration/test_influx_query.py
+	PYTHONPATH=src python tests/integration/test_influx_query.py
 
 phase2-tests:
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/test_market_data/ -v
 
 # Run the live agent (stop with Ctrl+C)
 phase2-agent:
-	python -m agents.market_data.agent
+	python -m oanda_bot.agents.market_data.agent
 
 # Check Redis stream contents (requires redis-cli)
 phase2-redis:
@@ -54,7 +54,7 @@ phase2-redis:
 
 # Stability test (runs ~5 minutes)
 phase2-stability:
-	python -m agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
+	python -m oanda_bot.agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
 	sleep 300; \
 	ps -p `cat /tmp/market_data_agent.pid` || true; \
 	tail -100 logs/trading-system.log | grep ERROR || true; \
@@ -64,27 +64,27 @@ phase2-stability:
 phase3: phase3-health phase3-metrics phase3-alert phase3-circuit phase3-tests
 
 phase3-health:
-	PYTHONPATH=. python tests/integration/test_health_integration.py
+	PYTHONPATH=src python tests/integration/test_health_integration.py
 
 phase3-metrics:
-	python -m agents.monitoring.agent & echo $$! > /tmp/monitoring_agent.pid; \
+	python -m oanda_bot.agents.monitoring.agent & echo $$! > /tmp/monitoring_agent.pid; \
 	sleep 5; \
 	curl -s http://localhost:8000/metrics | head -n 20 || true; \
 	kill `cat /tmp/monitoring_agent.pid` || true
 
 phase3-alert:
-	PYTHONPATH=. python tests/integration/test_alert_integration.py
+	PYTHONPATH=src python tests/integration/test_alert_integration.py
 
 phase3-circuit:
-	PYTHONPATH=. python tests/integration/test_circuit_integration.py
+	PYTHONPATH=src python tests/integration/test_circuit_integration.py
 
 phase3-tests:
 	pytest tests/test_monitoring/ -v -p pytest_asyncio
 
 # Integration: monitoring + market data
 phase3-integration:
-	python -m agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
-	python -m agents.monitoring.agent & echo $$! > /tmp/monitoring_agent.pid; \
+	python -m oanda_bot.agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
+	python -m oanda_bot.agents.monitoring.agent & echo $$! > /tmp/monitoring_agent.pid; \
 	sleep 120; \
 	curl -s http://localhost:8000/metrics | grep market_data || true; \
 	kill `cat /tmp/market_data_agent.pid` || true; \
@@ -95,15 +95,15 @@ phase4: phase4-indicators phase4-ma phase4-rsi phase4-tests
 	@echo "Phase 4: all checks passed"
 
 phase4-indicators:
-	PYTHONPATH=. python tests/integration/test_strategy_indicators.py
+	PYTHONPATH=src python tests/integration/test_strategy_indicators.py
 	@echo "phase4-indicators passed"
 
 phase4-ma:
-	PYTHONPATH=. python tests/integration/test_strategy_ma_crossover.py
+	PYTHONPATH=src python tests/integration/test_strategy_ma_crossover.py
 	@echo "phase4-ma passed"
 
 phase4-rsi:
-	PYTHONPATH=. python tests/integration/test_strategy_rsi_mean_reversion.py
+	PYTHONPATH=src python tests/integration/test_strategy_rsi_mean_reversion.py
 	@echo "phase4-rsi passed"
 
 phase4-tests:
@@ -112,25 +112,25 @@ phase4-tests:
 
 # Run strategy agent (requires market data agent running)
 phase4-agent:
-	python -m agents.strategy.agent
+	python -m oanda_bot.agents.strategy.agent
 
 # Start both agents and tail Redis (requires redis-cli)
 phase4-live:
-	python -m agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
+	python -m oanda_bot.agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
 	sleep 5; \
-	python -m agents.strategy.agent & echo $$! > /tmp/strategy_agent.pid; \
+	python -m oanda_bot.agents.strategy.agent & echo $$! > /tmp/strategy_agent.pid; \
 	command -v redis-cli >/dev/null 2>&1 && redis-cli XREAD BLOCK 30000 STREAMS stream:signals 0 || echo "redis-cli not found"; \
 	kill `cat /tmp/strategy_agent.pid` || true; \
 	kill `cat /tmp/market_data_agent.pid` || true
 
 # Signal validation (waits for a real signal; requires Redis)
 phase4-signal:
-	PYTHONPATH=. python tests/integration/test_strategy_signal_validation.py
+	PYTHONPATH=src python tests/integration/test_strategy_signal_validation.py
 
 # Example:
 # make strategy-regime-agent MODEL_JSON=data/research/multiframe_regime_model_latest.json INSTRUMENT=XAU_USD DECISION_MODE=ensemble GPU=auto
 strategy-regime-agent:
-	./.venv/bin/python -m agents.strategy.regime_runtime_agent \
+	./.venv/bin/python -m oanda_bot.agents.strategy.regime_runtime_agent \
 		--model-json "$(MODEL_JSON)" \
 		--instrument "$(if $(INSTRUMENT),$(INSTRUMENT),XAU_USD)" \
 		--decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" \
@@ -146,7 +146,7 @@ strategy-regime-agent:
 
 # XAU production profile with deeper multi-timeframe warmup context.
 # Example:
-# make strategy-regime-agent-xau-prod MODEL_JSON=data/research/multiframe_regime_model_20260228_194306.json
+# make strategy-regime-agent-xau-prod MODEL_JSON=models/active/multiframe_regime_model_20260228_194306.json
 strategy-regime-agent-xau-prod:
 	@$(MAKE) strategy-regime-agent \
 		MODEL_JSON="$(MODEL_JSON)" \
@@ -166,13 +166,13 @@ strategy-regime-agent-xau-prod:
 regime-shadow-smoke:
 	@test -n "$(MODEL_JSON)" || (echo "Missing MODEL_JSON=<runtime_model.json>" && exit 1)
 	cd /home/joe/Desktop/Algo_trading/oanda-trading-system && \
-		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m oanda_bot.agents.market_data.agent & echo $$! > /tmp/market_data_agent.pid; \
 		sleep 3; \
-		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.risk.agent & echo $$! > /tmp/risk_agent.pid; \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m oanda_bot.agents.risk.agent & echo $$! > /tmp/risk_agent.pid; \
 		sleep 2; \
-		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.execution.agent & echo $$! > /tmp/execution_agent.pid; \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m oanda_bot.agents.execution.agent & echo $$! > /tmp/execution_agent.pid; \
 		sleep 2; \
-		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m agents.strategy.regime_runtime_agent --model-json "$(MODEL_JSON)" --instrument "$(if $(INSTRUMENT),$(INSTRUMENT),XAU_USD)" --decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" --warmup "$(if $(WARMUP),$(WARMUP),on)" --warmup-base-bars "$(if $(WARMUP_BASE_BARS),$(WARMUP_BASE_BARS),1500)" $(if $(WARMUP_M15_BARS),--warmup-m15-bars "$(WARMUP_M15_BARS)",) $(if $(WARMUP_H1_BARS),--warmup-h1-bars "$(WARMUP_H1_BARS)",) $(if $(WARMUP_H4_BARS),--warmup-h4-bars "$(WARMUP_H4_BARS)",) $(if $(WARMUP_D1_BARS),--warmup-d1-bars "$(WARMUP_D1_BARS)",) --gpu "$(if $(GPU),$(GPU),auto)" & echo $$! > /tmp/strategy_regime_agent.pid; \
+		EXECUTION_SHADOW_MODE=true EXECUTION_LIVE_ENABLED=false ./.venv/bin/python -m oanda_bot.agents.strategy.regime_runtime_agent --model-json "$(MODEL_JSON)" --instrument "$(if $(INSTRUMENT),$(INSTRUMENT),XAU_USD)" --decision-mode "$(if $(DECISION_MODE),$(DECISION_MODE),ensemble)" --warmup "$(if $(WARMUP),$(WARMUP),on)" --warmup-base-bars "$(if $(WARMUP_BASE_BARS),$(WARMUP_BASE_BARS),1500)" $(if $(WARMUP_M15_BARS),--warmup-m15-bars "$(WARMUP_M15_BARS)",) $(if $(WARMUP_H1_BARS),--warmup-h1-bars "$(WARMUP_H1_BARS)",) $(if $(WARMUP_H4_BARS),--warmup-h4-bars "$(WARMUP_H4_BARS)",) $(if $(WARMUP_D1_BARS),--warmup-d1-bars "$(WARMUP_D1_BARS)",) --gpu "$(if $(GPU),$(GPU),auto)" & echo $$! > /tmp/strategy_regime_agent.pid; \
 		sleep "$(if $(DURATION_SEC),$(DURATION_SEC),60)"; \
 		kill `cat /tmp/strategy_regime_agent.pid` || true; \
 		kill `cat /tmp/execution_agent.pid` || true; \
@@ -192,12 +192,12 @@ phase6-tests:
 	@echo "phase6-tests passed"
 
 phase6-execution:
-	PYTHONPATH=. python tests/integration/test_execution_flow.py
+	PYTHONPATH=src python tests/integration/test_execution_flow.py
 	@echo "phase6-execution passed"
 
 # Run execution agent (requires all previous agents running)
 phase6-agent:
-	python -m agents.execution.agent
+	python -m oanda_bot.agents.execution.agent
 
 # Phase 7 - Integration & Testing
 phase7: phase7-integration phase7-performance phase7-stress phase7-failover
@@ -558,7 +558,7 @@ discord-execution-notifier:
 		--balance-timeout-seconds "$(if $(BALANCE_TIMEOUT_SECONDS),$(BALANCE_TIMEOUT_SECONDS),10)"
 
 # Example:
-# REGIME_MODEL_JSON=data/research/multiframe_regime_model_20260228_194306.json make trading-supervisor
+# REGIME_MODEL_JSON=models/active/multiframe_regime_model_20260228_194306.json make trading-supervisor
 trading-supervisor:
 	./.venv/bin/python scripts/trading_supervisor.py \
 		--project-root "$(if $(PROJECT_ROOT),$(PROJECT_ROOT),/home/joe/Desktop/Algo_trading/oanda-trading-system)" \

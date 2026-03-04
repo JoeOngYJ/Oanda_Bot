@@ -15,8 +15,8 @@ import os
 import datetime as dt
 from pathlib import Path
 
-from backtesting.data.manager import DataManager
-from backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.manager import DataManager
+from oanda_bot.backtesting.core.timeframe import Timeframe
 
 
 def parse_args():

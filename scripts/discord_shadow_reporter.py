@@ -15,7 +15,7 @@ from oandapyV20 import API
 from oandapyV20.endpoints.accounts import AccountSummary
 
 from scripts.promote_and_validate_selected_models import PROJECT_ROOT
-from shared.config import Config
+from oanda_bot.utils.config import Config
 
 
 def _now_iso() -> str:

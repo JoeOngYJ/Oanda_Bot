@@ -15,10 +15,10 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backtesting.analysis.metrics import expectancy_per_trade, profit_factor
-from backtesting.core.backtester import Backtester
-from backtesting.core.timeframe import Timeframe
-from backtesting.strategy.examples.xau_session_breakout import XAUSessionBreakout
+from oanda_bot.backtesting.analysis.metrics import expectancy_per_trade, profit_factor
+from oanda_bot.backtesting.core.backtester import Backtester
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.strategy.examples.xau_session_breakout import XAUSessionBreakout
 
 
 def _float_list(s: str):

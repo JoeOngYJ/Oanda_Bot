@@ -2,8 +2,8 @@
 """Test health checker integration"""
 
 import asyncio
-from agents.monitoring.health_checker import HealthChecker
-from shared.config import Config
+from oanda_bot.agents.monitoring.health_checker import HealthChecker
+from oanda_bot.utils.config import Config
 
 
 async def test_health_checker():

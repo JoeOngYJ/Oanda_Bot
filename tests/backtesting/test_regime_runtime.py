@@ -3,14 +3,14 @@ from decimal import Decimal
 
 import numpy as np
 
-from backtesting.core.regime_runtime import KMeansRegimePredictor, RegimeModel
-from backtesting.core.timeframe import Timeframe
-from backtesting.core.types import InstrumentSymbol
-from backtesting.data.models import OHLCVBar
-from backtesting.strategy.examples.regime_ensemble_decision import RegimeEnsembleDecisionStrategy
-from backtesting.strategy.examples.regime_switch_router import RegimeSwitchRouter
-from backtesting.strategy.base import StrategyBase
-from backtesting.strategy.signal import Signal, SignalDirection
+from oanda_bot.backtesting.core.regime_runtime import KMeansRegimePredictor, RegimeModel
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.core.types import InstrumentSymbol
+from oanda_bot.backtesting.data.models import OHLCVBar
+from oanda_bot.backtesting.strategy.examples.regime_ensemble_decision import RegimeEnsembleDecisionStrategy
+from oanda_bot.backtesting.strategy.examples.regime_switch_router import RegimeSwitchRouter
+from oanda_bot.backtesting.strategy.base import StrategyBase
+from oanda_bot.backtesting.strategy.signal import Signal, SignalDirection
 
 
 class AlwaysSignalStrategy(StrategyBase):

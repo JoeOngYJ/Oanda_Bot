@@ -2,9 +2,9 @@
 """Test circuit breaker integration"""
 
 from decimal import Decimal
-from agents.risk.circuit_breaker import CircuitBreaker
-from agents.risk.limits import RiskLimits
-from shared.config import Config
+from oanda_bot.agents.risk.circuit_breaker import CircuitBreaker
+from oanda_bot.agents.risk.limits import RiskLimits
+from oanda_bot.utils.config import Config
 
 
 def test_circuit_breaker():

@@ -3,9 +3,9 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from agents.market_data.storage import MarketDataStorage
-from shared.models import Instrument
-from shared.config import Config
+from oanda_bot.agents.market_data.storage import MarketDataStorage
+from oanda_bot.utils.models import Instrument
+from oanda_bot.utils.config import Config
 
 
 async def test_influx_query():

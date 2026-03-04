@@ -1,0 +1,35 @@
+{
+  "created_at_utc": "2026-02-28T15:29:53.496801+00:00",
+  "mode": "full",
+  "instruments": [
+    "XAU_USD"
+  ],
+  "base_tf": "M15",
+  "htf_1": "H1",
+  "htf_2": "H4",
+  "fine_window": {
+    "start": "2022-01-01",
+    "end": "2024-12-31"
+  },
+  "full_window": {
+    "start": "2015-01-01",
+    "end": "2024-12-31"
+  },
+  "oos_window": {
+    "start": "2025-01-01",
+    "end": "2025-12-31"
+  },
+  "models": {
+    "fine_tuned": "models/research/multiframe_regime_model_20260228_153202.json",
+    "full_history": "models/research/multiframe_regime_model_20260228_153220.json"
+  },
+  "outputs": {
+    "prepared_tfs": [
+      "M15",
+      "H1",
+      "H4",
+      "D1"
+    ],
+    "eval_csv": "models/research/mtf_baseline_eval_20260228_160403.csv"
+  }
+}

@@ -6,8 +6,8 @@ import copy
 from datetime import datetime
 from decimal import Decimal
 
-from agents.execution.order_manager import OrderManager
-from shared.models import TradeSignal, OrderStatus, OrderType, Side, Instrument
+from oanda_bot.agents.execution.order_manager import OrderManager
+from oanda_bot.utils.models import TradeSignal, OrderStatus, OrderType, Side, Instrument
 
 
 @pytest.fixture

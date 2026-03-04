@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from pydantic import ValidationError
 
-from shared.models import (
+from oanda_bot.utils.models import (
     Instrument, Side, OrderType, OrderStatus,
     MarketTick, TradeSignal, RiskCheckResult,
     Order, Execution, Position, HealthMetric

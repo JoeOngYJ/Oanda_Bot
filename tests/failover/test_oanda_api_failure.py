@@ -6,8 +6,8 @@ import pytest
 from datetime import datetime
 from decimal import Decimal
 
-from shared.models import Order, OrderType, OrderStatus, Instrument, Side
-from shared.config import Config
+from oanda_bot.utils.models import Order, OrderType, OrderStatus, Instrument, Side
+from oanda_bot.utils.config import Config
 
 
 @pytest.mark.asyncio

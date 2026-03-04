@@ -4,9 +4,9 @@ Unit tests for risk limits.
 
 import pytest
 from decimal import Decimal
-from shared.config import RiskLimitsConfig, PerInstrumentLimits, CircuitBreakerConfig
-from shared.models import Instrument
-from agents.risk.limits import RiskLimits
+from oanda_bot.utils.config import RiskLimitsConfig, PerInstrumentLimits, CircuitBreakerConfig
+from oanda_bot.utils.models import Instrument
+from oanda_bot.agents.risk.limits import RiskLimits
 
 
 @pytest.fixture

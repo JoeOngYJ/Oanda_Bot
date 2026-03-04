@@ -13,9 +13,9 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backtesting.core.backtester import Backtester
-from backtesting.core.timeframe import Timeframe
-from backtesting.strategy.examples.mean_reversion import MeanReversion
+from oanda_bot.backtesting.core.backtester import Backtester
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.strategy.examples.mean_reversion import MeanReversion
 
 
 def parse_args():

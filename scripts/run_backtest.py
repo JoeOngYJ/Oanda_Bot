@@ -1,10 +1,10 @@
 # scripts/run_backtest.py
 
 from datetime import datetime
-from backtesting.core.engine import BacktestEngine
-from backtesting.core.timeframe import Timeframe
-from backtesting.strategy.examples.multi_tf_trend import MultiTimeframeTrendStrategy
-from backtesting.analysis.monte_carlo import MonteCarloSimulator
+from oanda_bot.backtesting.core.engine import BacktestEngine
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.strategy.examples.multi_tf_trend import MultiTimeframeTrendStrategy
+from oanda_bot.backtesting.analysis.monte_carlo import MonteCarloSimulator
 
 def main():
     # Configuration
@@ -54,7 +54,7 @@ def main():
     print(f"95% CI: {mc_result.confidence_intervals[95]}")
     
     # Export to InfluxDB for Grafana
-    from backtesting.visualization.influxdb_exporter import export_to_influxdb
+    from oanda_bot.backtesting.visualization.influxdb_exporter import export_to_influxdb
     export_to_influxdb(result, config.get('influxdb'))
 
 if __name__ == '__main__':

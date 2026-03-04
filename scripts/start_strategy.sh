@@ -11,4 +11,4 @@ echo "  - Publish signals to Redis stream"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
-python -m agents.strategy.agent
+PYTHONPATH=src python -m oanda_bot.agents.strategy.agent

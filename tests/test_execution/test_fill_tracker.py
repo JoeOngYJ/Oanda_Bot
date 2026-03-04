@@ -5,8 +5,8 @@ import pytest
 from datetime import datetime
 from decimal import Decimal
 
-from agents.execution.fill_tracker import FillTracker
-from shared.models import Execution, Order, OrderStatus, OrderType, Side, Instrument
+from oanda_bot.agents.execution.fill_tracker import FillTracker
+from oanda_bot.utils.models import Execution, Order, OrderStatus, OrderType, Side, Instrument
 
 
 @pytest.fixture

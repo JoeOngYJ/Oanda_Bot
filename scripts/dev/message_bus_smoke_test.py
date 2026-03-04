@@ -3,8 +3,8 @@ import sys
 
 print("test.py starting...", flush=True)
 
-from shared.config import Config
-from shared.message_bus import MessageBus
+from oanda_bot.utils.config import Config
+from oanda_bot.utils.message_bus import MessageBus
 
 
 async def main():

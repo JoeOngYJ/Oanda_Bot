@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agents.execution.agent import ExecutionAgent
-from shared.config import Config
-from shared.models import ExecutionControlCommand, Instrument, RiskCheckResult, Side, TradeSignal
+from oanda_bot.agents.execution.agent import ExecutionAgent
+from oanda_bot.utils.config import Config
+from oanda_bot.utils.models import ExecutionControlCommand, Instrument, RiskCheckResult, Side, TradeSignal
 
 
 @pytest.fixture

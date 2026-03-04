@@ -21,19 +21,19 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backtesting.analysis.metrics import expectancy_per_trade, profit_factor
-from backtesting.core.engine import BacktestEngine
-from backtesting.core.timeframe import Timeframe
-from backtesting.data.manager import DataManager
-from backtesting.strategy.examples.atr_breakout import ATRBreakout
-from backtesting.strategy.examples.breakout import Breakout
-from backtesting.strategy.examples.ema_pullback import EMATrendPullback
-from backtesting.strategy.examples.ensemble_vote import EnsembleVoteStrategy
-from backtesting.strategy.examples.intermarket_mtf_confluence import IntermarketMTFConfluence
-from backtesting.strategy.examples.mean_reversion import MeanReversion
-from backtesting.strategy.examples.multi_tf_trend import MultiTimeframeTrendStrategy
-from backtesting.strategy.examples.rsi_bollinger_reversion import RSIBollingerReversion
-from backtesting.strategy.examples.volatility_compression_breakout import VolatilityCompressionBreakout
+from oanda_bot.backtesting.analysis.metrics import expectancy_per_trade, profit_factor
+from oanda_bot.backtesting.core.engine import BacktestEngine
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.manager import DataManager
+from oanda_bot.backtesting.strategy.examples.atr_breakout import ATRBreakout
+from oanda_bot.backtesting.strategy.examples.breakout import Breakout
+from oanda_bot.backtesting.strategy.examples.ema_pullback import EMATrendPullback
+from oanda_bot.backtesting.strategy.examples.ensemble_vote import EnsembleVoteStrategy
+from oanda_bot.backtesting.strategy.examples.intermarket_mtf_confluence import IntermarketMTFConfluence
+from oanda_bot.backtesting.strategy.examples.mean_reversion import MeanReversion
+from oanda_bot.backtesting.strategy.examples.multi_tf_trend import MultiTimeframeTrendStrategy
+from oanda_bot.backtesting.strategy.examples.rsi_bollinger_reversion import RSIBollingerReversion
+from oanda_bot.backtesting.strategy.examples.volatility_compression_breakout import VolatilityCompressionBreakout
 
 
 def _utc_now() -> dt.datetime:

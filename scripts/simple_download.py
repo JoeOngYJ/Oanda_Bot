@@ -30,9 +30,9 @@ import time
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backtesting.data.downloader import OandaDownloader
-from backtesting.data.warehouse import DataWarehouse
-from backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.downloader import OandaDownloader
+from oanda_bot.backtesting.data.warehouse import DataWarehouse
+from oanda_bot.backtesting.core.timeframe import Timeframe
 import pandas as pd
 
 

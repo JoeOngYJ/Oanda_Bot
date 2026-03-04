@@ -1,11 +1,11 @@
-from backtesting.analysis.metrics import (
+from oanda_bot.backtesting.analysis.metrics import (
     expectancy_per_trade,
     max_drawdown_from_equity,
     profit_factor,
     sharpe,
     win_rate,
 )
-from backtesting.analysis.reports import build_report
+from oanda_bot.backtesting.analysis.reports import build_report
 
 
 def test_metrics_basic_values():

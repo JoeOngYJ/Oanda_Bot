@@ -2,9 +2,9 @@
 """Test alert manager integration"""
 
 import asyncio
-from agents.monitoring.alerting import AlertManager
-from shared.config import Config
-from shared.message_bus import MessageBus
+from oanda_bot.agents.monitoring.alerting import AlertManager
+from oanda_bot.utils.config import Config
+from oanda_bot.utils.message_bus import MessageBus
 
 
 async def test_alert_manager():

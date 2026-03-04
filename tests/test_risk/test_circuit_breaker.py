@@ -5,10 +5,10 @@ Unit tests for circuit breaker.
 import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta
-from shared.config import CircuitBreakerConfig
-from agents.risk.limits import RiskLimits
-from agents.risk.circuit_breaker import CircuitBreaker
-from shared.config import RiskLimitsConfig, PerInstrumentLimits
+from oanda_bot.utils.config import CircuitBreakerConfig
+from oanda_bot.agents.risk.limits import RiskLimits
+from oanda_bot.agents.risk.circuit_breaker import CircuitBreaker
+from oanda_bot.utils.config import RiskLimitsConfig, PerInstrumentLimits
 
 
 @pytest.fixture

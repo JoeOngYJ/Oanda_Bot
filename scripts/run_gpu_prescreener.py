@@ -19,8 +19,8 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backtesting.core.timeframe import Timeframe
-from backtesting.data.manager import DataManager
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.manager import DataManager
 
 
 def _utc_now() -> dt.datetime:

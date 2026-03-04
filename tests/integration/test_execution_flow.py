@@ -5,11 +5,11 @@ import asyncio
 from datetime import datetime
 from decimal import Decimal
 
-from agents.execution.order_manager import OrderManager
-from agents.execution.oanda_executor import OandaExecutor
-from agents.execution.fill_tracker import FillTracker
-from shared.models import TradeSignal, Side, Instrument
-from shared.config import Config
+from oanda_bot.agents.execution.order_manager import OrderManager
+from oanda_bot.agents.execution.oanda_executor import OandaExecutor
+from oanda_bot.agents.execution.fill_tracker import FillTracker
+from oanda_bot.utils.models import TradeSignal, Side, Instrument
+from oanda_bot.utils.config import Config
 
 
 async def test_execution_flow():

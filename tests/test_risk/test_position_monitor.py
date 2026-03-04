@@ -5,10 +5,10 @@ Unit tests for position monitor.
 import pytest
 from decimal import Decimal
 from datetime import datetime
-from shared.config import RiskLimitsConfig, PerInstrumentLimits, CircuitBreakerConfig
-from shared.models import Position, MarketTick, Instrument, Side
-from agents.risk.limits import RiskLimits
-from agents.risk.position_monitor import PositionMonitor
+from oanda_bot.utils.config import RiskLimitsConfig, PerInstrumentLimits, CircuitBreakerConfig
+from oanda_bot.utils.models import Position, MarketTick, Instrument, Side
+from oanda_bot.agents.risk.limits import RiskLimits
+from oanda_bot.agents.risk.position_monitor import PositionMonitor
 
 
 @pytest.fixture

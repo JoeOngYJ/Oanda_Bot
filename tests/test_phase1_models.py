@@ -4,9 +4,9 @@ import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from backtesting.core.timeframe import Timeframe
-from backtesting.core.types import InstrumentSymbol, OrderSide, OrderStatus
-from backtesting.data.models import OHLCVBar
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.core.types import InstrumentSymbol, OrderSide, OrderStatus
+from oanda_bot.backtesting.data.models import OHLCVBar
 
 
 class TestTimeframe:

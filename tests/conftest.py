@@ -4,11 +4,17 @@ Pytest configuration and shared fixtures for testing.
 
 import pytest
 import asyncio
+import sys
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 import tempfile
 import yaml
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 
 @pytest.fixture(scope="session")
@@ -22,7 +28,7 @@ def event_loop():
 @pytest.fixture
 def sample_market_tick():
     """Sample market tick for testing"""
-    from shared.models import MarketTick, Instrument
+    from oanda_bot.utils.models import MarketTick, Instrument
 
     return MarketTick(
         instrument=Instrument.EUR_USD,
@@ -38,7 +44,7 @@ def sample_market_tick():
 @pytest.fixture
 def sample_trade_signal():
     """Sample trade signal for testing"""
-    from shared.models import TradeSignal, Instrument, Side
+    from oanda_bot.utils.models import TradeSignal, Instrument, Side
 
     return TradeSignal(
         signal_id="test-signal-123",

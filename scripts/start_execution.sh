@@ -11,4 +11,4 @@ echo "  - Track fills"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
-python -m agents.execution.agent
+PYTHONPATH=src python -m oanda_bot.agents.execution.agent

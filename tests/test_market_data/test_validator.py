@@ -5,8 +5,8 @@ Unit tests for data validator.
 import pytest
 from datetime import datetime, timedelta
 from decimal import Decimal
-from agents.market_data.data_validator import DataValidator
-from shared.models import MarketTick, Instrument
+from oanda_bot.agents.market_data.data_validator import DataValidator
+from oanda_bot.utils.models import MarketTick, Instrument
 from unittest.mock import MagicMock
 
 

@@ -3,7 +3,7 @@
 
 from oandapyV20 import API
 from oandapyV20.endpoints.accounts import AccountSummary
-from shared.config import Config
+from oanda_bot.utils.config import Config
 
 
 def test_oanda_connection():

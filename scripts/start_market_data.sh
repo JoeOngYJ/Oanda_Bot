@@ -10,4 +10,4 @@ echo "  - Publish ticks to Redis stream"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
-python -m agents.market_data.agent
+PYTHONPATH=src python -m oanda_bot.agents.market_data.agent

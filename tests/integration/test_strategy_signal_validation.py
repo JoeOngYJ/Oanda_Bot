@@ -1,8 +1,8 @@
 import asyncio
 
-from shared.config import Config
-from shared.message_bus import MessageBus
-from shared.models import TradeSignal
+from oanda_bot.utils.config import Config
+from oanda_bot.utils.message_bus import MessageBus
+from oanda_bot.utils.models import TradeSignal
 
 
 async def main(timeout_s: int = 60):

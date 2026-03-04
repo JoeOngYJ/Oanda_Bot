@@ -20,23 +20,23 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from backtesting.core.backtester import Backtester
-from backtesting.core.regime_runtime import (
+from oanda_bot.backtesting.core.backtester import Backtester
+from oanda_bot.backtesting.core.regime_runtime import (
     KMeansRegimePredictor,
     MultiTimeframeRegimeFeatureEngineer,
     RegimeFeatureEngineer,
     RegimeModel,
 )
-from backtesting.core.timeframe import Timeframe
-from backtesting.data.warehouse import DataWarehouse
-from backtesting.strategy.examples.atr_breakout import ATRBreakout
-from backtesting.strategy.examples.breakout import Breakout
-from backtesting.strategy.examples.ema_pullback import EMATrendPullback
-from backtesting.strategy.examples.mean_reversion import MeanReversion
-from backtesting.strategy.examples.regime_ensemble_decision import RegimeEnsembleDecisionStrategy
-from backtesting.strategy.examples.regime_switch_router import RegimeSwitchRouter
-from backtesting.strategy.examples.rsi_bollinger_reversion import RSIBollingerReversion
-from backtesting.strategy.examples.volatility_compression_breakout import VolatilityCompressionBreakout
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.warehouse import DataWarehouse
+from oanda_bot.backtesting.strategy.examples.atr_breakout import ATRBreakout
+from oanda_bot.backtesting.strategy.examples.breakout import Breakout
+from oanda_bot.backtesting.strategy.examples.ema_pullback import EMATrendPullback
+from oanda_bot.backtesting.strategy.examples.mean_reversion import MeanReversion
+from oanda_bot.backtesting.strategy.examples.regime_ensemble_decision import RegimeEnsembleDecisionStrategy
+from oanda_bot.backtesting.strategy.examples.regime_switch_router import RegimeSwitchRouter
+from oanda_bot.backtesting.strategy.examples.rsi_bollinger_reversion import RSIBollingerReversion
+from oanda_bot.backtesting.strategy.examples.volatility_compression_breakout import VolatilityCompressionBreakout
 
 import scripts.run_regime_runtime_backtest as runtime_bt
 

@@ -7,9 +7,9 @@ import time
 from datetime import datetime
 from decimal import Decimal
 
-from shared.models import MarketTick, Instrument
-from shared.message_bus import MessageBus
-from shared.config import Config
+from oanda_bot.utils.models import MarketTick, Instrument
+from oanda_bot.utils.message_bus import MessageBus
+from oanda_bot.utils.config import Config
 
 
 def generate_random_tick(instrument=Instrument.EUR_USD):

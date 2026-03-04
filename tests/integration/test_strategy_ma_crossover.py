@@ -1,8 +1,8 @@
 from decimal import Decimal
 from datetime import datetime, timezone
 
-from agents.strategy.models.moving_average_crossover import MovingAverageCrossover
-from shared.models import MarketTick, Instrument
+from oanda_bot.agents.strategy.models.moving_average_crossover import MovingAverageCrossover
+from oanda_bot.utils.models import MarketTick, Instrument
 
 
 def main():

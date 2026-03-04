@@ -5,9 +5,9 @@ import asyncio
 import time
 from decimal import Decimal
 from datetime import datetime
-from agents.market_data.storage import MarketDataStorage
-from shared.models import MarketTick, Instrument
-from shared.config import Config
+from oanda_bot.agents.market_data.storage import MarketDataStorage
+from oanda_bot.utils.models import MarketTick, Instrument
+from oanda_bot.utils.config import Config
 
 
 async def test_influx_write():

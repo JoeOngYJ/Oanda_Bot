@@ -19,9 +19,9 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-from backtesting.core.timeframe import Timeframe
-from backtesting.data.manager import DataManager
-from backtesting.data.warehouse import DataWarehouse
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.manager import DataManager
+from oanda_bot.backtesting.data.warehouse import DataWarehouse
 
 
 def _ensure_utc_index(df: pd.DataFrame) -> pd.DataFrame:

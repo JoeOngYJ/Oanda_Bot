@@ -3,11 +3,11 @@ from decimal import Decimal
 
 import pandas as pd
 
-from backtesting.core.engine import BacktestEngine
-from backtesting.core.timeframe import Timeframe
-from backtesting.data.models import OHLCVBar
-from backtesting.strategy.base import StrategyBase
-from backtesting.strategy.signal import Signal, SignalDirection
+from oanda_bot.backtesting.core.engine import BacktestEngine
+from oanda_bot.backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.models import OHLCVBar
+from oanda_bot.backtesting.strategy.base import StrategyBase
+from oanda_bot.backtesting.strategy.signal import Signal, SignalDirection
 
 
 class FlipStrategy(StrategyBase):

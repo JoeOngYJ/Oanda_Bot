@@ -23,11 +23,11 @@ import sys
 from pathlib import Path
 import pandas as pd
 
-# Add parent directory to path so we can import backtesting modules
+# Add parent directory to path so we can import oanda_bot.backtesting modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backtesting.data.warehouse import DataWarehouse
-from backtesting.core.timeframe import Timeframe
+from oanda_bot.backtesting.data.warehouse import DataWarehouse
+from oanda_bot.backtesting.core.timeframe import Timeframe
 
 
 def validate_csv(csv_path: Path) -> bool:

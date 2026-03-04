@@ -5,8 +5,8 @@ import asyncio
 import pytest
 from decimal import Decimal
 
-from shared.config import Config
-from shared.message_bus import MessageBus
+from oanda_bot.utils.config import Config
+from oanda_bot.utils.message_bus import MessageBus
 
 
 @pytest.mark.asyncio
