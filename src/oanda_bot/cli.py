@@ -28,7 +28,8 @@ def parse_args():
     p.add_argument("--end", default=None, help="End datetime ISO (UTC)")
     p.add_argument("--csv", help="Path to local CSV to import instead of OANDA")
     p.add_argument("--count", type=int, help="Number of candles to request (optional)")
-    p.add_argument("--price", choices=["M", "BA"], default="M", help="Price type: M (mid) or BA (bid+ask average)")
+    p.add_argument("--price", choices=["M", "BA"], default="M",
+                   help="Price type: M (mid) or BA (bid+ask candles)")
     return p.parse_args()
 
 
@@ -85,7 +86,10 @@ def main():
             raise SystemExit(f"CSV file not found: {csv_path}")
         print(f"Importing CSV {csv_path} into warehouse for {instrument} {base_tf.name}")
         dm.warehouse.import_csv(csv_path, instrument, base_tf)
-        dfs = dm.ensure_data(instrument, base_tf, start, end, [base_tf])
+        dfs = dm.ensure_data(
+            instrument, base_tf, start, end, [base_tf],
+            price=args.price, count=args.count
+        )
         print("Imported and resampled:", [tf.name for tf in dfs.keys()])
         return
 
@@ -95,7 +99,10 @@ def main():
 
     print(f"DEBUG CLI: Downloading {instrument} {base_tf.name} from {start} to {end}")
     print(f"Downloading {instrument} {base_tf.name} from OANDA from {start or 'most-recent'} to {end}")
-    dfs = dm.ensure_data(instrument, base_tf, start, end, [base_tf])
+    dfs = dm.ensure_data(
+        instrument, base_tf, start, end, [base_tf],
+        price=args.price, count=args.count
+    )
     print("Downloaded and saved timeframes:", [tf.name for tf in dfs.keys()])
 
 

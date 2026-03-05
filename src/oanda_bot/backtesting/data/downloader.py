@@ -72,7 +72,85 @@ class OandaDownloader:
             # to the correct host internally.
             self.api = API(access_token=self.token, environment=env)
 
-    def download(self, instrument: str, granularity: str, start: Optional[dt.datetime] = None, end: Optional[dt.datetime] = None, count: Optional[int] = None) -> pd.DataFrame:
+    @staticmethod
+    def _to_utc_aware(value: Optional[dt.datetime]) -> Optional[dt.datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=dt.timezone.utc)
+        return value.astimezone(dt.timezone.utc)
+
+    @staticmethod
+    def _parse_candle_time(candle_time: str) -> tuple[pd.Timestamp, dt.datetime]:
+        ts_utc = pd.to_datetime(candle_time, utc=True)
+        rec_time = ts_utc.tz_localize(None)
+        return rec_time, ts_utc.to_pydatetime()
+
+    @staticmethod
+    def _price_requests_bid_ask(price: str) -> bool:
+        p = (price or "").upper()
+        return "B" in p and "A" in p
+
+    def _parse_candle_record(self, candle: dict, rec_time: pd.Timestamp, write_bid_ask: bool) -> dict:
+        bid = candle.get("bid") or {}
+        ask = candle.get("ask") or {}
+        mid = candle.get("mid") or {}
+
+        def f(x):
+            return float(x) if x is not None else None
+
+        if mid:
+            open_p, high_p, low_p, close_p = map(f, (mid.get("o"), mid.get("h"), mid.get("l"), mid.get("c")))
+            return {
+                "time": rec_time,
+                "open": open_p,
+                "high": high_p,
+                "low": low_p,
+                "close": close_p,
+                "volume": int(candle.get("volume", 0)),
+            }
+
+        bo, bh, bl, bc = map(f, (bid.get("o"), bid.get("h"), bid.get("l"), bid.get("c")))
+        ao, ah, al, ac = map(f, (ask.get("o"), ask.get("h"), ask.get("l"), ask.get("c")))
+
+        if write_bid_ask and (bid and ask):
+            return {
+                "time": rec_time,
+                "bid_o": bo,
+                "bid_h": bh,
+                "bid_l": bl,
+                "bid_c": bc,
+                "ask_o": ao,
+                "ask_h": ah,
+                "ask_l": al,
+                "ask_c": ac,
+                "mid_o": (bo + ao) / 2 if bo is not None and ao is not None else None,
+                "mid_h": (bh + ah) / 2 if bh is not None and ah is not None else None,
+                "mid_l": (bl + al) / 2 if bl is not None and al is not None else None,
+                "mid_c": (bc + ac) / 2 if bc is not None and ac is not None else None,
+                "spread_c": (ac - bc) if ac is not None and bc is not None else None,
+                "volume": int(candle.get("volume", 0)),
+            }
+
+        return {
+            "time": rec_time,
+            "open": (bo + ao) / 2 if bo is not None and ao is not None else None,
+            "high": (bh + ah) / 2 if bh is not None and ah is not None else None,
+            "low": (bl + al) / 2 if bl is not None and al is not None else None,
+            "close": (bc + ac) / 2 if bc is not None and ac is not None else None,
+            "volume": int(candle.get("volume", 0)),
+        }
+
+    def download(
+            self,
+            instrument: str,
+            granularity: str,
+            start: Optional[dt.datetime] = None,
+            end: Optional[dt.datetime] = None,
+            count: Optional[int] = None,
+            price: str = "M",                 # NEW
+            store_bid_ask: bool = False       # NEW
+        ) -> pd.DataFrame:
         """Download candles and return a pandas DataFrame indexed by UTC datetime.
 
         - instrument: e.g. 'EUR_USD'
@@ -95,7 +173,8 @@ class OandaDownloader:
             params["count"] = count
 
         # Support requesting different price types: 'M' (mid), 'BA' (bid+ask)
-        params["price"] = "M"
+        params["price"] = price
+        write_bid_ask = store_bid_ask and self._price_requests_bid_ask(price)
 
         # OANDA limits responses (count) — page if necessary.
         MAX_PER_REQUEST = 5000
@@ -130,8 +209,8 @@ class OandaDownloader:
             # chunk length in seconds so each chunk is at most MAX_PER_REQUEST candles
             chunk_seconds = MAX_PER_REQUEST * sec
 
-            current_from = start.replace(tzinfo=dt.timezone.utc) if start is not None else dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
-            final_to = end.replace(tzinfo=dt.timezone.utc) if end is not None else None
+            current_from = self._to_utc_aware(start) if start is not None else dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
+            final_to = self._to_utc_aware(end) if end is not None else None
 
             print(f"DEBUG: Chunking time-range download: start={start}, end={end}, final_to={final_to}")
 
@@ -185,40 +264,8 @@ class OandaDownloader:
 
                     complete_candles_found = True
                     candle_time = c.get("time")
-                    rec_time = pd.to_datetime(candle_time).tz_convert(None)
-                    iteration_last_time = pd.to_datetime(candle_time).replace(tzinfo=dt.timezone.utc)
-
-                    if "mid" in c and c.get("mid"):
-                        p = c.get("mid")
-                        open_p = p.get("o")
-                        high_p = p.get("h")
-                        low_p = p.get("l")
-                        close_p = p.get("c")
-                    else:
-                        bid = c.get("bid") or {}
-                        ask = c.get("ask") or {}
-                        open_p = None
-                        high_p = None
-                        low_p = None
-                        close_p = None
-                        if bid or ask:
-                            if bid.get("o") is not None and ask.get("o") is not None:
-                                open_p = (float(bid.get("o")) + float(ask.get("o"))) / 2.0
-                            if bid.get("h") is not None and ask.get("h") is not None:
-                                high_p = (float(bid.get("h")) + float(ask.get("h"))) / 2.0
-                            if bid.get("l") is not None and ask.get("l") is not None:
-                                low_p = (float(bid.get("l")) + float(ask.get("l"))) / 2.0
-                            if bid.get("c") is not None and ask.get("c") is not None:
-                                close_p = (float(bid.get("c")) + float(ask.get("c"))) / 2.0
-
-                    rec = {
-                        "time": rec_time,
-                        "open": float(open_p) if open_p is not None else None,
-                        "high": float(high_p) if high_p is not None else None,
-                        "low": float(low_p) if low_p is not None else None,
-                        "close": float(close_p) if close_p is not None else None,
-                        "volume": int(c.get("volume", 0)),
-                    }
+                    rec_time, iteration_last_time = self._parse_candle_time(candle_time)
+                    rec = self._parse_candle_record(c, rec_time, write_bid_ask)
                     records.append(rec)
 
                 # Only advance if we found complete candles, otherwise break to avoid infinite loop
@@ -266,7 +313,7 @@ class OandaDownloader:
                     params["count"] = MAX_PER_REQUEST
 
                 if last_time is not None:
-                    params["from"] = (last_time + dt.timedelta(microseconds=1)).replace(tzinfo=dt.timezone.utc).isoformat()
+                    params["from"] = (last_time + dt.timedelta(microseconds=1)).isoformat()
 
                 print(f"Requesting recent/count-based chunk (params: { {k: params[k] for k in ('count','from') if k in params} })")
                 resp = None
@@ -299,48 +346,12 @@ class OandaDownloader:
 
                     candle_time = c.get("time")
                     # prefer mid, but if price 'BA' requested, look for 'bid'/'ask'
-                    rec_time = pd.to_datetime(candle_time).tz_convert(None)
-
-                    if "mid" in c and c.get("mid"):
-                        p = c.get("mid")
-                        open_p = p.get("o")
-                        high_p = p.get("h")
-                        low_p = p.get("l")
-                        close_p = p.get("c")
-                    else:
-                        # fallback: try bid/ask average
-                        bid = c.get("bid") or {}
-                        ask = c.get("ask") or {}
-                        def safe(v):
-                            return float(v) if v is not None else None
-
-                        open_p = None
-                        high_p = None
-                        low_p = None
-                        close_p = None
-                        if bid or ask:
-                            # compute mid as average where possible
-                            if bid.get("o") is not None and ask.get("o") is not None:
-                                open_p = (float(bid.get("o")) + float(ask.get("o"))) / 2.0
-                            if bid.get("h") is not None and ask.get("h") is not None:
-                                high_p = (float(bid.get("h")) + float(ask.get("h"))) / 2.0
-                            if bid.get("l") is not None and ask.get("l") is not None:
-                                low_p = (float(bid.get("l")) + float(ask.get("l"))) / 2.0
-                            if bid.get("c") is not None and ask.get("c") is not None:
-                                close_p = (float(bid.get("c")) + float(ask.get("c"))) / 2.0
-
-                    rec = {
-                        "time": rec_time,
-                        "open": float(open_p) if open_p is not None else None,
-                        "high": float(high_p) if high_p is not None else None,
-                        "low": float(low_p) if low_p is not None else None,
-                        "close": float(close_p) if close_p is not None else None,
-                        "volume": int(c.get("volume", 0)),
-                    }
+                    rec_time, _ = self._parse_candle_time(candle_time)
+                    rec = self._parse_candle_record(c, rec_time, write_bid_ask)
                     records.append(rec)
 
                 # update pagination state
-                last_time = pd.to_datetime(candles[-1].get("time"))
+                last_time = pd.to_datetime(candles[-1].get("time"), utc=True).to_pydatetime()
 
                 # decrement remaining if we were given a count
                 if remaining is not None:
@@ -353,12 +364,26 @@ class OandaDownloader:
                     break
 
         if not records:
-            return pd.DataFrame(columns=["open", "high", "low", "close", "volume"]).set_index(pd.DatetimeIndex([]))
+            if write_bid_ask:
+                cols = ["bid_o", "bid_h", "bid_l", "bid_c", "ask_o", "ask_h", "ask_l", "ask_c", "mid_o", "mid_h", "mid_l", "mid_c", "spread_c", "volume"]
+            else:
+                cols = ["open", "high", "low", "close", "volume"]
+            return pd.DataFrame(columns=cols).set_index(pd.DatetimeIndex([]))
 
         df = pd.DataFrame.from_records(records).set_index("time")
         df.index.name = "datetime"
         df = df[~df.index.duplicated(keep="first")]
-        # ensure numeric dtypes
-        df = df.astype({"open": float, "high": float, "low": float, "close": float, "volume": int})
+        # ensure numeric dtypes for columns that exist
+        float_cols = [
+            "open", "high", "low", "close",
+            "bid_o", "bid_h", "bid_l", "bid_c",
+            "ask_o", "ask_h", "ask_l", "ask_c",
+            "mid_o", "mid_h", "mid_l", "mid_c",
+            "spread_c",
+        ]
+        cast_map = {col: float for col in float_cols if col in df.columns}
+        if "volume" in df.columns:
+            cast_map["volume"] = int
+        if cast_map:
+            df = df.astype(cast_map)
         return df
-

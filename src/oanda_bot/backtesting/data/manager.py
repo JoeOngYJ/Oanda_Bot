@@ -33,6 +33,10 @@ class DataManager:
         end_date: Optional[dt.datetime],
         timeframes: List[Timeframe],
         force_download: bool = False,
+        *,
+        price: str = "M",
+        count: Optional[int] = None,
+        store_bid_ask: bool = False,
     ) -> Dict[Timeframe, pd.DataFrame]:
         """
         Ensure data exists for all requested timeframes.
@@ -73,14 +77,20 @@ class DataManager:
                 # download left side (older data)
                 if needs_left:
                     left_end = cached_min - dt.timedelta(microseconds=1)
-                    left_df = self.downloader.download(instrument=instrument, granularity=gran, start=start_date, end=left_end)
+                    left_df = self.downloader.download(
+                                    instrument=instrument, granularity=gran,
+                                    start=start_date, end=left_end,
+                                    price=price, count=count, store_bid_ask=store_bid_ask)
                     self._validate_data(left_df)
                     parts.insert(0, left_df)
 
                 # download right side (newer data)
                 if needs_right:
                     right_start = cached_max + dt.timedelta(microseconds=1)
-                    right_df = self.downloader.download(instrument=instrument, granularity=gran, start=right_start, end=end_date)
+                    right_df = self.downloader.download(
+                        instrument=instrument, granularity=gran, start=right_start, end=end_date,
+                        price=price, count=count, store_bid_ask=store_bid_ask
+                    )
                     self._validate_data(right_df)
                     parts.append(right_df)
 
@@ -99,7 +109,10 @@ class DataManager:
 
         # If we reach here we need to download fresh (no cache or force)
         gran = base_timeframe.to_oanda_granularity() if isinstance(base_timeframe, Timeframe) else str(base_timeframe)
-        data = self.downloader.download(instrument=instrument, granularity=gran, start=start_date, end=end_date)
+        data = self.downloader.download(
+            instrument=instrument, granularity=gran, start=start_date, end=end_date,
+            price=price, count=count, store_bid_ask=store_bid_ask
+        )
 
         # Validate
         self._validate_data(data)
@@ -110,22 +123,28 @@ class DataManager:
         # Resample
         return self._resample_to_timeframes(data, timeframes)
     
-    def _resample_to_timeframes(
-        self,
-        base_data: pd.DataFrame,
-        timeframes: List[Timeframe]
-    ) -> Dict[Timeframe, pd.DataFrame]:
-        """Resample base timeframe to higher timeframes"""
+    def _resample_to_timeframes(self, base_data, timeframes):
         result = {}
+        has_mid = all(c in base_data.columns for c in ("mid_o","mid_h","mid_l","mid_c"))
+
         for tf in timeframes:
-            resampled = base_data.resample(tf.to_pandas_freq()).agg({
-                'open': 'first',
-                'high': 'max',
-                'low': 'min',
-                'close': 'last',
-                'volume': 'sum'
-            }).dropna()
-            result[tf] = resampled
+            if has_mid:
+                agg = {
+                    "mid_o": "first",
+                    "mid_h": "max",
+                    "mid_l": "min",
+                    "mid_c": "last",
+                    "volume": "sum",
+                }
+                if "spread_c" in base_data.columns:
+                    agg["spread_c"] = "mean"
+                res = base_data.resample(tf.to_pandas_freq()).agg(agg).dropna()
+                res = res.rename(columns={"mid_o":"open","mid_h":"high","mid_l":"low","mid_c":"close"})
+            else:
+                agg = {"open":"first","high":"max","low":"min","close":"last","volume":"sum"}
+                res = base_data.resample(tf.to_pandas_freq()).agg(agg).dropna()
+
+            result[tf] = res
         return result
 
     def _validate_data(self, df: pd.DataFrame) -> None:

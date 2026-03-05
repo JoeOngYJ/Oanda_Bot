@@ -27,7 +27,8 @@ def parse_args():
     p.add_argument("--end", help="End datetime ISO (UTC)")
     p.add_argument("--csv", help="Path to local CSV to import instead of OANDA")
     p.add_argument("--count", type=int, help="Number of candles to request (optional)")
-    p.add_argument("--price", choices=["M", "BA"], default="M", help="Price type: M (mid) or BA (bid+ask average)")
+    p.add_argument("--price", choices=["M", "BA"], default="M",
+                   help="Price type: M (mid) or BA (bid+ask candles)")
     return p.parse_args()
 
 
@@ -62,7 +63,10 @@ def main():
 
         print(f"Importing CSV {csv_path} into warehouse for {instrument} {base_tf.name}")
         dm.warehouse.import_csv(csv_path, instrument, base_tf)
-        dfs = dm.ensure_data(instrument, base_tf, start, end, [base_tf])
+        dfs = dm.ensure_data(
+            instrument, base_tf, start, end, [base_tf],
+            price=args.price, count=args.count
+        )
         print("Imported and resampled:", [tf.name for tf in dfs.keys()])
         return
 
@@ -74,7 +78,10 @@ def main():
     # DataManager will call OandaDownloader; pass price/count via env if needed
     # For now DataManager delegates to downloader; if you need to pass params like price
     # or count directly, extend DataManager.download wrappers.
-    dfs = dm.ensure_data(instrument, base_tf, start, end, [base_tf])
+    dfs = dm.ensure_data(
+        instrument, base_tf, start, end, [base_tf],
+        price=args.price, count=args.count
+    )
     print("Downloaded and saved timeframes:", [tf.name for tf in dfs.keys()])
 
 
