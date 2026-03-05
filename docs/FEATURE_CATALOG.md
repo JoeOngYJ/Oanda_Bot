@@ -104,12 +104,8 @@ This file lists current capabilities, grouped by domain.
    7. Trade list and equity curve
 
 ### 2.5 Research Acceleration
-1. GPU-capable parameter pre-screener (`scripts/run_gpu_prescreener.py`) for:
-   1. Breakout grids
-   2. Mean reversion grids
-   3. EMA pullback grids
-2. Cost-aware proxy scoring includes spread, slippage, and OANDA core commission approximation.
-3. Pre-screen shortlist output can be fed into universe walk-forward runner using:
+1. Cost-aware proxy scoring includes spread, slippage, and OANDA core commission approximation.
+2. Strategy shortlist output can be fed into universe walk-forward runner using:
    1. `--candidate-shortlist <csv>`
 
 ### 2.6 Regime Runtime Selection
@@ -124,7 +120,6 @@ This file lists current capabilities, grouped by domain.
 3. Strategy auto-selection:
    1. `RegimeSwitchRouter` routes strategy logic by current regime.
    2. `RegimeEnsembleDecisionStrategy` runs multiple strategy modules in parallel and applies regime-aware weighted voting.
-   3. `scripts/run_regime_runtime_backtest.py` executes regime-switched backtests (default `--decision-mode ensemble`, optional `router`).
 
 ## 3. Config and Infrastructure
 1. YAML config loading with env var substitution.

@@ -64,7 +64,7 @@ Use case:
 ## 5. Validation Standard (Required)
 1. Walk-forward evaluation, not single in-sample fit.
 2. Cost-aware simulation (`spread + slippage + broker commission`).
-3. Per-regime model selection via `scripts/run_regime_gpu_research.py`.
+3. Per-regime model selection using the current XAUUSD two-stage training pipeline.
 4. Correlation-aware shortlist via `scripts/run_universe_research.py`.
 
 No strategy is "always safe" or guaranteed profitable. Promotion must be based on out-of-sample stability and risk limits.

@@ -106,7 +106,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--candidate-shortlist",
         default="",
-        help="Optional CSV from scripts/run_gpu_prescreener.py to filter strategy candidates by name/config.",
+        help="Optional CSV shortlist to filter strategy candidates by name/config.",
     )
     return parser.parse_args()
 

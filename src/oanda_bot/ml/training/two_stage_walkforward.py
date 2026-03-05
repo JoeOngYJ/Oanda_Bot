@@ -281,14 +281,14 @@ def _rolling_percentile_torch(x: "torch.Tensor", window: int, min_periods: int) 
     return out
 
 
-def _pack_sequences_gpu(
+def _pack_sequences_torch(
     seq_df: pd.DataFrame,
     *,
     seq_len: int,
     device: "torch.device",
 ) -> Tuple[np.ndarray, np.ndarray]:
     if torch is None:
-        raise ImportError("PyTorch is required for GPU sequence packing.")
+        raise ImportError("PyTorch is required for torch sequence packing.")
     arr = torch.as_tensor(seq_df.to_numpy(dtype=np.float32), device=device)
     n, _f = arr.shape
     if n < seq_len:
@@ -306,6 +306,88 @@ def _pack_sequences_gpu(
         end_idx.detach().cpu().numpy().astype(np.int64),
         packed.detach().cpu().numpy().astype(np.float32),
     )
+
+
+def _build_context_table(
+    m15: pd.DataFrame,
+    h1: pd.DataFrame,
+    h4: pd.DataFrame,
+    *,
+    target_index: pd.DatetimeIndex,
+    fb: FeatureBuilder,
+) -> np.ndarray:
+    m15 = m15.sort_index()
+    h1 = h1.sort_index()
+    h4 = h4.sort_index()
+
+    atr_m15 = fb._atr(
+        m15["high"].astype(float),
+        m15["low"].astype(float),
+        m15["close"].astype(float),
+        fb.atr_period,
+    )
+    close_m15 = m15["close"].astype(float)
+
+    prev_day = (
+        m15[["high", "low"]]
+        .resample("1D")
+        .agg({"high": "max", "low": "min"})
+        .shift(1)
+        .reindex(m15.index, method="ffill")
+    )
+
+    h1_adx = fb._adx(h1["high"], h1["low"], h1["close"], fb.adx_period)
+    h4_adx = fb._adx(h4["high"], h4["low"], h4["close"], fb.adx_period)
+    h1_vol_pct = fb._rolling_percentile(h1["volume"].astype(float), fb.percentile_window, 20)
+    h4_vol_pct = fb._rolling_percentile(h4["volume"].astype(float), fb.percentile_window, 20)
+
+    h1_slope = (h1["close"].astype(float) / (h1["close"].astype(float).shift(24) + EPS) - 1.0) / 24.0
+    h4_slope = (h4["close"].astype(float) / (h4["close"].astype(float).shift(12) + EPS) - 1.0) / 12.0
+
+    base = pd.DataFrame(index=m15.index)
+    base["atr"] = atr_m15
+    base["close"] = close_m15
+    base["prev_day_high"] = prev_day["high"]
+    base["prev_day_low"] = prev_day["low"]
+    base["h1_slope"] = h1_slope.reindex(m15.index, method="ffill")
+    base["h4_slope"] = h4_slope.reindex(m15.index, method="ffill")
+    base["h1_adx"] = h1_adx.reindex(m15.index, method="ffill") / 100.0
+    base["h4_adx"] = h4_adx.reindex(m15.index, method="ffill") / 100.0
+    base["h1_vol_pct"] = h1_vol_pct.reindex(m15.index, method="ffill")
+    base["h4_vol_pct"] = h4_vol_pct.reindex(m15.index, method="ffill")
+    base = base.reindex(target_index)
+
+    atr = base["atr"].to_numpy(dtype=np.float64)
+    close = base["close"].to_numpy(dtype=np.float64)
+    prev_hi = base["prev_day_high"].to_numpy(dtype=np.float64)
+    prev_lo = base["prev_day_low"].to_numpy(dtype=np.float64)
+
+    dist_hi = (close - prev_hi) / (atr + EPS)
+    dist_lo = (close - prev_lo) / (atr + EPS)
+    dist_hi[~np.isfinite(prev_hi)] = np.nan
+    dist_lo[~np.isfinite(prev_lo)] = np.nan
+
+    hour = target_index.hour
+    asia = ((hour >= 0) & (hour < 8)).astype(float)
+    london = ((hour >= 8) & (hour < 13)).astype(float)
+    ny = ((hour >= 13) & (hour < 22)).astype(float)
+
+    ctx = np.column_stack(
+        [
+            base["h1_slope"].to_numpy(dtype=np.float64),
+            base["h4_slope"].to_numpy(dtype=np.float64),
+            base["h1_adx"].to_numpy(dtype=np.float64),
+            base["h4_adx"].to_numpy(dtype=np.float64),
+            base["h1_vol_pct"].to_numpy(dtype=np.float64),
+            base["h4_vol_pct"].to_numpy(dtype=np.float64),
+            dist_hi,
+            dist_lo,
+            asia,
+            london,
+            ny,
+        ]
+    )
+    return np.nan_to_num(ctx, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
 
 
 def _build_m15_feature_frame_gpu(
@@ -452,88 +534,61 @@ def build_samples(
         seq_df = _expand_seq_features(fb._build_m15_feature_frame(m15c)).replace([np.inf, -np.inf], np.nan)
     feat_cols = list(seq_df.columns)
 
-    times: List[pd.Timestamp] = []
-    seq_list: List[np.ndarray] = []
-    ctx_list: List[np.ndarray] = []
-    y_opp_list: List[float] = []
-    y_dir_list: List[int] = []
-    gross_list: List[float] = []
-    net_list: List[float] = []
-    close_list: List[float] = []
-    atr_list: List[float] = []
-    cost_list: List[float] = []
+    target_index = seq_df.index
+    label_aligned = labeled.reindex(target_index)
+    m15_aligned = m15c.reindex(target_index)
+    context_full = _build_context_table(m15c, h1n, h4n, target_index=target_index, fb=fb)
 
-    if backend == "gpu":
-        dev = preprocess_device or torch.device("cuda")
-        end_idx, seq_packed = _pack_sequences_gpu(seq_df[feat_cols], seq_len=seq_len, device=dev)
-        idx_values = seq_df.index.to_numpy()
-        y_opp_s = labeled["y_opportunity"]
-        y_dir_s = labeled["y_direction"]
-        for j, i_end in enumerate(end_idx.tolist()):
-            ts = pd.Timestamp(idx_values[i_end])
-            if ts < start or ts >= end:
-                continue
-            y_opp = y_opp_s.get(ts, np.nan)
-            y_dir = y_dir_s.get(ts, np.nan)
-            if pd.isna(y_opp) or pd.isna(y_dir):
-                continue
-            try:
-                ctx = fb._build_context_vector(m15c, h1n, h4n, ts).astype(np.float32)
-            except Exception:
-                continue
-            times.append(ts)
-            seq_list.append(seq_packed[j])
-            ctx_list.append(ctx)
-            y_opp_list.append(float(y_opp))
-            y_dir_list.append(int(y_dir))
-            gross_list.append(float(labeled.at[ts, "gross_ret"]) if pd.notna(labeled.at[ts, "gross_ret"]) else np.nan)
-            net_list.append(float(labeled.at[ts, "net_ret"]) if pd.notna(labeled.at[ts, "net_ret"]) else np.nan)
-            close_list.append(float(m15c.at[ts, "close"]))
-            atr_list.append(float(m15c.at[ts, "atr"]) if pd.notna(m15c.at[ts, "atr"]) else np.nan)
-            cost_list.append(float(m15c.at[ts, "cost_est"]) if pd.notna(m15c.at[ts, "cost_est"]) else np.nan)
+    if torch is not None:
+        dev_pack = preprocess_device or (torch.device("cuda") if backend == "gpu" else torch.device("cpu"))
+        end_idx, seq_packed = _pack_sequences_torch(seq_df[feat_cols], seq_len=seq_len, device=dev_pack)
     else:
-        for ts in labeled.index:
-            if ts < start or ts >= end:
-                continue
-            if pd.isna(labeled.at[ts, "y_opportunity"]) or pd.isna(labeled.at[ts, "y_direction"]):
-                continue
+        # Fallback when torch is unavailable: no packed windows.
+        end_idx = np.asarray([], dtype=np.int64)
+        seq_packed = np.empty((0, seq_len, len(feat_cols)), dtype=np.float32)
 
-            w = seq_df.loc[:ts].tail(seq_len)
-            if len(w) != seq_len:
-                continue
-            if w[feat_cols].isna().any(axis=None):
-                continue
+    if end_idx.size == 0:
+        raise RuntimeError("No sequence windows were created. Check data coverage and seq_len.")
 
-            try:
-                ctx = fb._build_context_vector(m15c, h1n, h4n, ts).astype(np.float32)
-            except Exception:
-                continue
+    ts_all = pd.to_datetime(target_index.to_numpy()[end_idx], utc=True).tz_convert(None)
+    y_opp_all = pd.to_numeric(label_aligned["y_opportunity"], errors="coerce").to_numpy(dtype=np.float64)[end_idx]
+    y_dir_all = pd.to_numeric(label_aligned["y_direction"], errors="coerce").to_numpy(dtype=np.float64)[end_idx]
+    gross_all = pd.to_numeric(label_aligned["gross_ret"], errors="coerce").to_numpy(dtype=np.float64)[end_idx]
+    net_all = pd.to_numeric(label_aligned["net_ret"], errors="coerce").to_numpy(dtype=np.float64)[end_idx]
+    close_all = pd.to_numeric(m15_aligned["close"], errors="coerce").to_numpy(dtype=np.float64)[end_idx]
+    atr_all = pd.to_numeric(m15_aligned["atr"], errors="coerce").to_numpy(dtype=np.float64)[end_idx]
+    cost_all = pd.to_numeric(m15_aligned["cost_est"], errors="coerce").to_numpy(dtype=np.float64)[end_idx]
+    ctx_all = context_full[end_idx]
 
-            times.append(ts)
-            seq_list.append(w[feat_cols].to_numpy(dtype=np.float32))
-            ctx_list.append(ctx)
-            y_opp_list.append(float(labeled.at[ts, "y_opportunity"]))
-            y_dir_list.append(int(labeled.at[ts, "y_direction"]))
-            gross_list.append(float(labeled.at[ts, "gross_ret"]) if pd.notna(labeled.at[ts, "gross_ret"]) else np.nan)
-            net_list.append(float(labeled.at[ts, "net_ret"]) if pd.notna(labeled.at[ts, "net_ret"]) else np.nan)
-            close_list.append(float(m15c.at[ts, "close"]))
-            atr_list.append(float(m15c.at[ts, "atr"]) if pd.notna(m15c.at[ts, "atr"]) else np.nan)
-            cost_list.append(float(m15c.at[ts, "cost_est"]) if pd.notna(m15c.at[ts, "cost_est"]) else np.nan)
+    in_range = (ts_all >= start) & (ts_all < end)
+    label_ok = np.isfinite(y_opp_all) & np.isfinite(y_dir_all)
+    keep = in_range & label_ok
 
-    if not times:
+    if not np.any(keep):
         raise RuntimeError("No samples created. Check data columns/range and feature warmup.")
 
+    ts_kept = ts_all[keep]
+    seq_kept = seq_packed[keep]
+    ctx_kept = ctx_all[keep]
+    y_opp_kept = y_opp_all[keep].astype(np.float32)
+    y_dir_kept = y_dir_all[keep].astype(np.int64)
+    gross_kept = gross_all[keep].astype(np.float32)
+    net_kept = net_all[keep].astype(np.float32)
+    close_kept = close_all[keep].astype(np.float32)
+    atr_kept = atr_all[keep].astype(np.float32)
+    cost_kept = cost_all[keep].astype(np.float32)
+
     return SampleBundle(
-        timestamps=np.asarray([t.isoformat() for t in times]),
-        seq=np.asarray(seq_list, dtype=np.float32),
-        ctx=np.asarray(ctx_list, dtype=np.float32),
-        y_opportunity=np.asarray(y_opp_list, dtype=np.float32),
-        y_direction=np.asarray(y_dir_list, dtype=np.int64),
-        gross_ret=np.asarray(gross_list, dtype=np.float32),
-        net_ret=np.asarray(net_list, dtype=np.float32),
-        close=np.asarray(close_list, dtype=np.float32),
-        atr=np.asarray(atr_list, dtype=np.float32),
-        cost_est=np.asarray(cost_list, dtype=np.float32),
+        timestamps=np.asarray([pd.Timestamp(t).isoformat() for t in ts_kept]),
+        seq=seq_kept,
+        ctx=ctx_kept,
+        y_opportunity=y_opp_kept,
+        y_direction=y_dir_kept,
+        gross_ret=gross_kept,
+        net_ret=net_kept,
+        close=close_kept,
+        atr=atr_kept,
+        cost_est=cost_kept,
         feature_columns=feat_cols,
     )
 

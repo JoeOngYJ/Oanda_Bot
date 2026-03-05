@@ -1,0 +1,115 @@
+{
+  "step_id": "step_002_20240301",
+  "instrument": "XAU_USD",
+  "window": {
+    "train_start": "2024-03-01 00:00:00",
+    "train_end": "2025-09-01 00:00:00",
+    "val_start": "2025-09-01 00:00:00",
+    "val_end": "2025-11-01 00:00:00",
+    "test_start": "2025-11-01 00:00:00",
+    "test_end": "2026-01-01 00:00:00"
+  },
+  "horizon_bars": 8,
+  "no_trade_band": 0.3,
+  "gate": 0.695378577709198,
+  "target_trade_rate": 0.2,
+  "opp_band_quantile": 0.7,
+  "opp_atr_k": 0.3,
+  "vol_aware_opp": true,
+  "train_config": {
+    "batch_size": 128,
+    "epochs": 30,
+    "patience": 5,
+    "lr": 0.0003,
+    "weight_decay": 0.01,
+    "grad_clip": 1.0,
+    "seed": 42
+  },
+  "schema": {
+    "seq_len": 128,
+    "seq_features": 48,
+    "ctx_dim": 11,
+    "feature_columns": [
+      "ret_1",
+      "ret_4",
+      "atr_14",
+      "rsi_14",
+      "adx_14",
+      "body_pct",
+      "upper_wick_pct",
+      "lower_wick_pct",
+      "close_pos_in_range",
+      "session_sin",
+      "session_cos",
+      "bb_width_pct",
+      "atr_pct",
+      "spread_feat",
+      "vol_pct",
+      "ret_1_lag1",
+      "ret_1_lag2",
+      "ret_1_lag3",
+      "ret_4_lag1",
+      "ret_4_lag2",
+      "ret_4_lag3",
+      "rsi_14_lag1",
+      "rsi_14_lag2",
+      "rsi_14_lag3",
+      "adx_14_lag1",
+      "adx_14_lag2",
+      "adx_14_lag3",
+      "body_pct_lag1",
+      "body_pct_lag2",
+      "body_pct_lag3",
+      "upper_wick_pct_lag1",
+      "upper_wick_pct_lag2",
+      "upper_wick_pct_lag3",
+      "lower_wick_pct_lag1",
+      "lower_wick_pct_lag2",
+      "lower_wick_pct_lag3",
+      "bb_width_pct_lag1",
+      "bb_width_pct_lag2",
+      "bb_width_pct_lag3",
+      "atr_pct_lag1",
+      "atr_pct_lag2",
+      "atr_pct_lag3",
+      "spread_feat_lag1",
+      "spread_feat_lag2",
+      "spread_feat_lag3",
+      "vol_pct_lag1",
+      "vol_pct_lag2",
+      "vol_pct_lag3"
+    ]
+  },
+  "counts": {
+    "train": 35472,
+    "val": 4122,
+    "test": 3841
+  },
+  "losses": {
+    "opp_val_loss": 0.6415207665978055,
+    "dir_val_loss": 0.698997286233035,
+    "opp_epochs": 10,
+    "dir_epochs": 6
+  },
+  "metrics": {
+    "test_mean_p_trade": 0.5970627665519714,
+    "test_trade_rate": 0.09867222077583962,
+    "test_direction_balance": 0.08970976253298153,
+    "test_dir_acc": 0.4671280276816609,
+    "test_opp_auc": 0.5891197643246824
+  },
+  "label_balance": {
+    "train_opp_pos": 0.3000112764997745,
+    "val_opp_pos": 0.5611353711790393,
+    "test_opp_pos": 0.5876073939078365
+  },
+  "artifacts": {
+    "opportunity_model": "models/wf/step_002_20240301/opportunity.pt",
+    "direction_model": "models/wf/step_002_20240301/direction.pt",
+    "test_signals": "models/wf/step_002_20240301/test_signals.parquet"
+  },
+  "trading_eval": {
+    "status": "placeholder",
+    "note": "Saved per-bar probability signals for later backtester integration."
+  }
+}
